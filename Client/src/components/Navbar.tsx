@@ -19,7 +19,7 @@ export default function Navbar({ onLogout }: Props) {
       <div className="nav-logo">
         <span className="nav-logo-mark">⬡</span>
         <span className="nav-logo-text">
-          FLEET<span className="cyan">FORGE</span>
+          RIG<span className="cyan">LEDGER</span>
         </span>
       </div>
 
