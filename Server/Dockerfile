@@ -1,9 +1,9 @@
 # Build backend
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
-COPY Server/go.mod Server/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
-COPY Server/ .
+COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o server .
 
 # Run stage
