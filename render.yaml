@@ -1,6 +1,7 @@
 services:
+  # Backend API
   - type: web
-    name: rig-ledger
+    name: rig-ledger-api
     runtime: docker
     dockerfilePath: ./Server/Dockerfile
     dockerContext: .
@@ -12,4 +13,22 @@ services:
       - key: GIN_MODE
         value: release
       - key: ALLOWED_ORIGIN
-        value: ""
+        value: https://rig-ledger.onrender.com
+
+  # Frontend Static Site
+  - type: web
+    name: rig-ledger
+    env: static
+    buildCommand: cd Client && npm install && npm run build
+    staticPublishPath: Client/dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://rig-ledger-api.onrender.com

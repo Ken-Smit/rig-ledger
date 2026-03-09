@@ -1,6 +1,9 @@
 import axios from 'axios'
 
+const API_URL = import.meta.env.VITE_API_URL || ''
+
 const client = axios.create({
+  baseURL: API_URL,
   withCredentials: true,
 })
 
@@ -18,7 +21,7 @@ client.interceptors.response.use(
 
     try {
       if (!refreshPromise) {
-        refreshPromise = axios.post('/api/v1/auth/refresh', null, {
+        refreshPromise = axios.post(`${API_URL}/api/v1/auth/refresh`, null, {
           withCredentials: true,
         }).then(() => {})
       }

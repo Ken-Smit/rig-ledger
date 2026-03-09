@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/routes"
@@ -51,22 +50,6 @@ func main() {
 	// Health check
 	router.GET("/healthz", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
-	})
-
-	// Serve React static files
-	staticDir := "./static"
-	router.Static("/assets", filepath.Join(staticDir, "assets"))
-
-	// SPA fallback: serve static files first, then index.html
-	router.NoRoute(func(c *gin.Context) {
-		// Try to serve the file from static dir
-		filePath := filepath.Join(staticDir, c.Request.URL.Path)
-		if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-			c.File(filePath)
-			return
-		}
-		// Fallback to index.html for SPA routing
-		c.File(filepath.Join(staticDir, "index.html"))
 	})
 
 	port := os.Getenv("PORT")
