@@ -4,7 +4,8 @@ services:
     name: rig-ledger-api
     runtime: docker
     rootDir: Server
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./Server/Dockerfile
+    dockerContext: ./Server
     envVars:
       - key: MONGODB_URI
         sync: false # set manually in Render dashboard
