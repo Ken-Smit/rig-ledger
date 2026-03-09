@@ -1,0 +1,30 @@
+# ===== GO =====
+Server/.env
+Server/vendor/
+
+# Go binaries
+Server/server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# ===== NODE / REACT =====
+Client/node_modules/
+Client/dist/
+Client/.env
+Client/.env.local
+Client/.env.*.local
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== EDITOR =====
+.vscode/
+.idea/
+*.swp
+*.swo

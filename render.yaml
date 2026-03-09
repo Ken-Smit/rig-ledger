@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: rig-ledger
+    runtime: docker
+    dockerfilePath: ./Server/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: MONGODB_URI
+        sync: false # set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GIN_MODE
+        value: release
+      - key: ALLOWED_ORIGIN
+        value: ""
