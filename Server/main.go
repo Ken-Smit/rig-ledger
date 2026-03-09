@@ -33,12 +33,13 @@ func main() {
 
 	router := gin.Default()
 
-	// CORS only needed for local dev (frontend on different port)
+	// CORS configuration for cross-origin frontend
 	if allowedOrigin := os.Getenv("ALLOWED_ORIGIN"); allowedOrigin != "" {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     []string{allowedOrigin},
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Content-Type"},
+			AllowHeaders:     []string{"Content-Type", "Authorization"},
+			ExposeHeaders:    []string{"Set-Cookie"},
 			AllowCredentials: true,
 		}))
 	}
