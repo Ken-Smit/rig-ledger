@@ -1,5 +1,6 @@
 # ===== GO =====
 Server/.env
+Server/.env.example
 Server/vendor/
 
 # Go binaries

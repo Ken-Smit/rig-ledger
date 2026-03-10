@@ -12,9 +12,6 @@ func isProduction() bool {
 }
 
 func cookieSameSite() http.SameSite {
-	if isProduction() {
-		return http.SameSiteNoneMode
-	}
 	return http.SameSiteLaxMode
 }
 
