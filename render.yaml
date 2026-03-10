@@ -28,7 +28,7 @@ services:
         name: Cache-Control
         value: no-cache
     routes:
-      - type: rewrite
+      - type: proxy
         source: /api/*
         destination: https://rig-ledger-api.onrender.com/api/*
       - type: rewrite
