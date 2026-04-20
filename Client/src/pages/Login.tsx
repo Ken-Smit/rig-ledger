@@ -110,7 +110,7 @@ export default function Login() {
         {tab === 'login' ? (
           <form onSubmit={handleLogin} className="login-form">
             <div className="field-group">
-              <label className="field-label">OPERATOR ID (EMAIL)</label>
+              <label className="field-label">Email</label>
               <input
                 className="field-input"
                 type="email"
@@ -122,7 +122,7 @@ export default function Login() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">PASSWORD</label>
+              <label className="field-label">Password</label>
               <input
                 className="field-input"
                 type="password"
@@ -167,7 +167,7 @@ export default function Login() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">OPERATOR ID (EMAIL)</label>
+              <label className="field-label">EMAIL</label>
               <input
                 className="field-input"
                 type="email"
@@ -179,7 +179,7 @@ export default function Login() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">ACCESS KEY (MIN 6 CHARS)</label>
+              <label className="field-label">Password</label>
               <input
                 className="field-input"
                 type="password"
