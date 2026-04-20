@@ -7,6 +7,15 @@ const client = axios.create({
   withCredentials: true,
 })
 
+// Attach access token from localStorage to every request
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 let refreshPromise: Promise<void> | null = null
 
 client.interceptors.response.use(
@@ -21,16 +30,35 @@ client.interceptors.response.use(
 
     try {
       if (!refreshPromise) {
-        refreshPromise = axios.post(`${API_URL}/api/v1/auth/refresh`, null, {
-          withCredentials: true,
-        }).then(() => {})
+        const refreshToken = localStorage.getItem('refresh_token')
+        refreshPromise = axios
+          .post(
+            `${API_URL}/api/v1/auth/refresh`,
+            { refresh_token: refreshToken },
+            { withCredentials: true }
+          )
+          .then((res) => {
+            const { access_token, refresh_token } = res.data
+            if (access_token) localStorage.setItem('access_token', access_token)
+            if (refresh_token) localStorage.setItem('refresh_token', refresh_token)
+          })
       }
 
       await refreshPromise
       refreshPromise = null
+
+      // Update the retried request with the new token
+      const newToken = localStorage.getItem('access_token')
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`
+      }
+
       return client(original)
     } catch {
       refreshPromise = null
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('logged_in')
       return Promise.reject(error)
     }
   }

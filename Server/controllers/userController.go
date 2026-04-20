@@ -102,11 +102,15 @@ func Login(c *gin.Context) {
 		"$set": bson.M{"refresh_token": refreshToken},
 	})
 
-	// Set httpOnly cookies
+	// Set httpOnly cookies (desktop fallback)
 	utils.SetAccessTokenCookie(c, accessToken)
 	utils.SetRefreshTokenCookie(c, refreshToken)
 
-	c.JSON(http.StatusOK, gin.H{"logged_in": true})
+	c.JSON(http.StatusOK, gin.H{
+		"logged_in":     true,
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
 }
 
 func GetUserProfile(c *gin.Context) {
@@ -198,8 +202,17 @@ func DeleteUser(c *gin.Context) {
 }
 
 func RefreshAccessToken(c *gin.Context) {
-	refreshTokenStr, err := c.Cookie("refresh_token")
-	if err != nil || refreshTokenStr == "" {
+	// Check request body first, then fall back to cookie
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	c.ShouldBindJSON(&body)
+
+	refreshTokenStr := body.RefreshToken
+	if refreshTokenStr == "" {
+		refreshTokenStr, _ = c.Cookie("refresh_token")
+	}
+	if refreshTokenStr == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "No refresh token provided"})
 		return
 	}
@@ -252,11 +265,15 @@ func RefreshAccessToken(c *gin.Context) {
 		"$set": bson.M{"refresh_token": newRefreshToken},
 	})
 
-	// Set new httpOnly cookies
+	// Set new httpOnly cookies (desktop fallback)
 	utils.SetAccessTokenCookie(c, newAccessToken)
 	utils.SetRefreshTokenCookie(c, newRefreshToken)
 
-	c.JSON(http.StatusOK, gin.H{"logged_in": true})
+	c.JSON(http.StatusOK, gin.H{
+		"logged_in":     true,
+		"access_token":  newAccessToken,
+		"refresh_token": newRefreshToken,
+	})
 }
 
 func Logout(c *gin.Context) {
