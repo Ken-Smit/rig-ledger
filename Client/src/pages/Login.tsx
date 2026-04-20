@@ -122,7 +122,7 @@ export default function Login() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">ACCESS KEY</label>
+              <label className="field-label">PASSWORD</label>
               <input
                 className="field-input"
                 type="password"
