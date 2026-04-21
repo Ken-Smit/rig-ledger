@@ -34,9 +34,10 @@ function isInPeriod(dateStr: string, period: Period): boolean {
   const date = parseLocal(dateStr)
   const now = new Date()
   if (period === 'day') {
-    return date.getFullYear() === now.getFullYear() &&
-           date.getMonth()    === now.getMonth()    &&
-           date.getDate()     === now.getDate()
+    // Rolling last 7 days, inclusive of today
+    const start = new Date(now); start.setDate(now.getDate() - 6); start.setHours(0, 0, 0, 0)
+    const end   = new Date(now); end.setHours(23, 59, 59, 999)
+    return date >= start && date <= end
   }
   if (period === 'week') {
     const dow = now.getDay() === 0 ? 6 : now.getDay() - 1 // Mon = 0
@@ -53,7 +54,9 @@ function isInPeriod(dateStr: string, period: Period): boolean {
 function periodLabel(period: Period): string {
   const now = new Date()
   if (period === 'day') {
-    return now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+    const start = new Date(now); start.setDate(now.getDate() - 6)
+    const fmtShort = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return `${fmtShort(start)} – ${fmtShort(now)}, ${now.getFullYear()}`
   }
   if (period === 'week') {
     const dow = now.getDay() === 0 ? 6 : now.getDay() - 1
@@ -138,13 +141,6 @@ export default function Expenses() {
 
   const net = totals.income - totals.fuel - totals.maintenance
 
-  const PERIODS: { key: Period; label: string }[] = [
-    { key: 'day',   label: 'TODAY'   },
-    { key: 'week',  label: 'WEEK'    },
-    { key: 'month', label: 'MONTH'   },
-    { key: 'all',   label: 'ALL TIME'},
-  ]
-
   return (
     <>
       <div className="dashboard-page">
@@ -154,7 +150,7 @@ export default function Expenses() {
           {/* Header */}
           <div className="fleet-header">
             <div>
-              <h2 className="section-title">EXPENSES</h2>
+              <h2 className="section-title">P&amp;L</h2>
               <p className="section-sub">{periodLabel(period)}</p>
             </div>
             <button className="btn-primary" onClick={() => setShowAdd(true)} disabled={trucks.length === 0}>
@@ -164,41 +160,44 @@ export default function Expenses() {
 
           {error && <div className="alert-error">{error}</div>}
 
-          {/* Period toggle */}
-          <div className="exp-period-tabs">
-            {PERIODS.map(p => (
-              <button
-                key={p.key}
-                className={`exp-period-tab${period === p.key ? ' exp-period-active' : ''}`}
-                onClick={() => setPeriod(p.key)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          {/* Chart with period tabs */}
+          <ExpenseChart expenses={filtered} period={period} onPeriodChange={setPeriod} />
 
-          {/* Summary cards */}
+          {/* Consolidated P&L card */}
           <div className="exp-summary">
-            <div className="exp-sum-card">
-              <div className="exp-sum-label">FUEL COSTS</div>
-              <div className="exp-sum-value text-amber">{money(totals.fuel)}</div>
-            </div>
-            <div className="exp-sum-card">
-              <div className="exp-sum-label">MAINTENANCE COSTS</div>
-              <div className="exp-sum-value text-amber">{money(totals.maintenance)}</div>
-            </div>
-            <div className="exp-sum-card">
-              <div className="exp-sum-label">LOAD INCOME</div>
-              <div className="exp-sum-value text-green">{money(totals.income)}</div>
-            </div>
-            <div className="exp-sum-card">
-              <div className="exp-sum-label">NET</div>
-              <div className={`exp-sum-value ${net >= 0 ? 'text-green' : 'text-red'}`}>{money(net)}</div>
+            <div className="pl-card">
+              <div className="pl-net-label">NET</div>
+              <div className={`pl-net-value ${net >= 0 ? 'text-cyan' : 'text-red'}`}>
+                {money(net)}
+              </div>
+
+              <div className="pl-divider" />
+
+              <div className="pl-breakdown">
+                <div className="pl-row">
+                  <span className="pl-row-label text-cyan">
+                    <span className="pl-row-icon">▲</span>
+                    LOAD INCOME
+                  </span>
+                  <span className="pl-row-value text-cyan">{money(totals.income)}</span>
+                </div>
+                <div className="pl-row">
+                  <span className="pl-row-label text-red">
+                    <span className="pl-row-icon">▼</span>
+                    FUEL COSTS
+                  </span>
+                  <span className="pl-row-value text-red">{money(totals.fuel)}</span>
+                </div>
+                <div className="pl-row">
+                  <span className="pl-row-label text-red">
+                    <span className="pl-row-icon">▼</span>
+                    MAINTENANCE
+                  </span>
+                  <span className="pl-row-value text-red">{money(totals.maintenance)}</span>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Chart */}
-          <ExpenseChart expenses={filtered} />
 
           {/* Truck filter */}
           {trucks.length > 0 && (
