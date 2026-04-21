@@ -7,11 +7,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// JWTAuthMiddleware validates the access token from the httpOnly cookie
+// JWTAuthMiddleware validates the access token from the Authorization header or httpOnly cookie
 func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenString, err := c.Cookie("access_token")
-		if err != nil || tokenString == "" {
+		var tokenString string
+
+		// Check Authorization header first (Bearer token)
+		if auth := c.GetHeader("Authorization"); len(auth) > 7 && auth[:7] == "Bearer " {
+			tokenString = auth[7:]
+		}
+
+		// Fall back to httpOnly cookie
+		if tokenString == "" {
+			tokenString, _ = c.Cookie("access_token")
+		}
+
+		if tokenString == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 			c.Abort()
 			return

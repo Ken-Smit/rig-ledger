@@ -8,7 +8,7 @@ interface Props {
 const TABS = [
   { to: '/',         label: 'DASHBOARD' },
   { to: '/fleet',    label: 'FLEET'     },
-  { to: '/expenses', label: 'EXPENSES'  },
+  { to: '/expenses', label: 'P&L'       },
 ]
 
 export default function Navbar({ onLogout }: Props) {

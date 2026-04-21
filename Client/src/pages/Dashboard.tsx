@@ -215,7 +215,6 @@ export default function Dashboard() {
                 <div className={`stat-value ${monthlyNet >= 0 ? 'text-green' : 'text-red'}`}>
                   {money(monthlyNet)}
                 </div>
-                <div className="stat-sub">INCOME MINUS EXPENSES</div>
               </div>
             </div>
 
@@ -299,7 +298,7 @@ export default function Dashboard() {
                         <span className={`exp-type-badge ${TYPE_CLASS[e.type]}`}>
                           {TYPE_LABEL[e.type]}
                         </span>
-                        <span className={`db-act-amount ${e.type === 'income' ? 'text-green' : 'text-amber'}`}>
+                        <span className={`db-act-amount ${e.type === 'income' ? 'text-cyan' : 'text-red'}`}>
                           {e.type === 'income' ? '+' : '-'}{money(e.amount)}
                         </span>
                       </div>

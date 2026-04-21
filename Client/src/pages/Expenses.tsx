@@ -250,7 +250,7 @@ export default function Expenses() {
                     </span>
                   </span>
                   <span className="exp-desc">{exp.description ?? '—'}</span>
-                  <span className={`exp-amount exp-col-right ${exp.type === 'income' ? 'text-green' : 'text-amber'}`}>
+                  <span className={`exp-amount exp-col-right ${exp.type === 'income' ? 'text-cyan' : 'text-red'}`}>
                     {exp.type === 'income' ? '+' : '-'}{money(exp.amount)}
                   </span>
                   <span>
