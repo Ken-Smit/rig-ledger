@@ -49,7 +49,7 @@ export default function Navbar({ onLogout }: Props) {
           {theme === 'dark' ? '☀' : '☾'}
         </button>
         <button className="btn-ghost btn-sm" onClick={onLogout}>
-          ⏻ LOGOUT
+          ⏻ <span className="nav-logout-label">LOGOUT</span>
         </button>
       </div>
     </nav>

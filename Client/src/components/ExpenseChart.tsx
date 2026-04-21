@@ -260,7 +260,12 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
         })}
       </div>
 
-      <div className="rh-chart-area" style={{ ['--glow-color' as string]: displayColor } as React.CSSProperties}>
+      <div
+        className="rh-chart-area"
+        style={{ ['--glow-color' as string]: displayColor } as React.CSSProperties}
+        onTouchEnd={handleMouseLeave}
+        onTouchCancel={handleMouseLeave}
+      >
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
@@ -332,14 +337,14 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
                   stroke={displayColor}
                   strokeDasharray="2 6"
                   strokeOpacity={0.55}
-                  label={{
+                  label={hoverPoint ? {
                     value: `AVG ${fmtCompactMoney(stats.avg)}`,
                     position: 'insideTopLeft',
                     fill: displayColor,
                     fontSize: 10,
                     fontFamily: 'var(--font-mono)',
                     fillOpacity: 0.85,
-                  }}
+                  } : undefined}
                 />
               )}
 
@@ -370,13 +375,13 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
                   stroke="var(--bg)"
                   strokeWidth={2}
                   ifOverflow="visible"
-                  label={{
+                  label={hoverPoint ? {
                     value: `MAX ${fmtCompactMoney(stats.max[activeLine])}`,
                     position: 'top',
                     fill: displayColor,
                     fontSize: 10,
                     fontFamily: 'var(--font-mono)',
-                  }}
+                  } : undefined}
                 />
               )}
               {stats && stats.min !== stats.max && (
@@ -388,13 +393,13 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
                   stroke={displayColor}
                   strokeWidth={2}
                   ifOverflow="visible"
-                  label={{
+                  label={hoverPoint ? {
                     value: `MIN ${fmtCompactMoney(stats.min[activeLine])}`,
                     position: 'bottom',
                     fill: 'var(--text-dim)',
                     fontSize: 10,
                     fontFamily: 'var(--font-mono)',
-                  }}
+                  } : undefined}
                 />
               )}
             </AreaChart>
