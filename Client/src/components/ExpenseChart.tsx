@@ -10,7 +10,7 @@ import {
   ReferenceLine,
   ReferenceDot,
   Tooltip,
-  type TooltipProps,
+  type TooltipContentProps,
 } from 'recharts'
 import type { Expense } from '../types/expense'
 
@@ -89,7 +89,7 @@ function fmtAxisDate(dateStr: string): string {
   return `${m}/${d}`
 }
 
-function DetailTooltip({ active, payload }: TooltipProps<number, string>) {
+function DetailTooltip({ active, payload }: TooltipContentProps<number, string>) {
   if (!active || !payload || !payload.length) return null
   const pt = payload[0].payload as ChartPoint
   return (
@@ -207,11 +207,13 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
   }
   const ghostKeys = (Object.keys(LINE_CONFIG) as ActiveLine[]).filter(k => k !== activeLine)
 
-  const handleMouseMove = useCallback((state: { activePayload?: { payload: ChartPoint }[] }) => {
-    if (state?.activePayload?.[0]) {
-      setHoverPoint(state.activePayload[0].payload)
+  const handleMouseMove = useCallback((state: { activeIndex?: number | string | null }) => {
+    const raw = state?.activeIndex
+    const idx = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : -1
+    if (Number.isFinite(idx) && idx >= 0 && idx < data.length) {
+      setHoverPoint(data[idx])
     }
-  }, [])
+  }, [data])
 
   const handleMouseLeave = useCallback(() => setHoverPoint(null), [])
 
