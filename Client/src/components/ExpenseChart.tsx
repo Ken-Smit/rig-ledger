@@ -89,7 +89,7 @@ function fmtAxisDate(dateStr: string): string {
   return `${m}/${d}`
 }
 
-function DetailTooltip({ active, payload }: TooltipContentProps<number, string>) {
+function DetailTooltip({ active, payload }: Partial<TooltipContentProps<number, string>>) {
   if (!active || !payload || !payload.length) return null
   const pt = payload[0].payload as ChartPoint
   return (
