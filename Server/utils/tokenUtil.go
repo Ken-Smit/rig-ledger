@@ -46,16 +46,42 @@ func ValidateRefreshToken(tokenString string) (string, error) {
 	return validateToken(tokenString, "refresh")
 }
 
+// validateToken parses and verifies a signed JWT, enforcing HS256 as the only
+// acceptable algorithm and confirming the embedded "type" claim matches expectedType.
+// It returns the userID claim on success.
 func validateToken(tokenString string, expectedType string) (string, error) {
-	token, err := jwt.ParseWithClaims(tokenString, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(getSecret()), nil
-	})
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		jwt.MapClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			// Defense in depth against alg-confusion attacks:
+			//   1. Reject anything that is not HMAC. SigningMethodHMAC inherently
+			//      excludes alg=none and asymmetric algorithms (RS*/ES*/PS*) where
+			//      an attacker could try to coerce our HMAC secret to be treated
+			//      as a public key.
+			//   2. Within HMAC, pin to HS256 specifically so HS384/HS512 tokens
+			//      are not silently accepted with the same secret.
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+				return nil, fmt.Errorf("unexpected HMAC variant: %v", token.Header["alg"])
+			}
+			return []byte(getSecret()), nil
+		},
+		// Belt-and-suspenders: parser-level allowlist short-circuits unsupported
+		// algorithms before the keyfunc is even invoked.
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
 
 	if err != nil || !token.Valid {
 		return "", err
 	}
 
-	claims := token.Claims.(jwt.MapClaims)
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("invalid token claims")
+	}
 
 	tokenType, ok := claims["type"].(string)
 	if !ok || tokenType != expectedType {

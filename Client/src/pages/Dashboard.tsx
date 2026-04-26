@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTrucks } from '../api/trucks'
 import { getExpenses } from '../api/expenses'
-import { logout } from '../api/auth'
 import type { Truck } from '../types/truck'
 import type { Expense } from '../types/expense'
 import Navbar from '../components/Navbar'
+import { useAuth } from '../auth/AuthProvider'
 
 // ── Maintenance rules ──────────────────────────────────────────────────────
 interface MaintenanceRule {
@@ -81,16 +81,16 @@ const TYPE_CLASS: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { logout } = useAuth()
   const [trucks, setTrucks]         = useState<Truck[]>([])
   const [expenses, setExpenses]     = useState<Expense[]>([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState('')
   const [alertsOpen, setAlertsOpen] = useState(true)
 
-  const handleLogout = async () => { await logout(); localStorage.removeItem('logged_in'); navigate('/login') }
+  const handleLogout = async () => { await logout(); navigate('/login') }
 
   useEffect(() => {
-    if (!localStorage.getItem('logged_in')) { navigate('/login'); return }
     Promise.all([getTrucks(), getExpenses()])
       .then(([t, e]) => { setTrucks(t); setExpenses(e) })
       .catch((err: unknown) => {
@@ -99,7 +99,7 @@ export default function Dashboard() {
         else setError('FAILED TO LOAD DATA')
       })
       .finally(() => setLoading(false))
-  }, [navigate])
+  }, [])
 
   // Monthly expense slice
   const monthly = useMemo(() => expenses.filter(e => isThisMonth(e.date)), [expenses])

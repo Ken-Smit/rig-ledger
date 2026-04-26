@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getTrucks } from '../api/trucks'
-import { logout } from '../api/auth'
 import type { Truck } from '../types/truck'
 import Navbar from '../components/Navbar'
+import { useAuth } from '../auth/AuthProvider'
 
 function fmt(d?: string) {
   if (!d) return '—'
@@ -27,13 +27,12 @@ function Row({ label, value }: { label: string; value?: string | number | null }
 export default function TruckDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { logout } = useAuth()
   const [truck, setTruck] = useState<Truck | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!localStorage.getItem('logged_in')) { navigate('/login'); return }
-
     getTrucks().then(trucks => {
       const found = trucks.find(t => t._id === id)
       if (!found) setError('UNIT NOT FOUND')
@@ -41,11 +40,10 @@ export default function TruckDetail() {
     }).catch(() => {
       setError('FAILED TO LOAD UNIT DATA')
     }).finally(() => setLoading(false))
-  }, [id, navigate])
+  }, [id])
 
   const handleLogout = async () => {
     await logout()
-    localStorage.removeItem('logged_in')
     navigate('/login')
   }
 

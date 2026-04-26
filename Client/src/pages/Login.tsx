@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, register } from '../api/auth'
+import { register } from '../api/auth'
+import { useAuth } from '../auth/AuthProvider'
 import { useTheme } from '../hooks/useTheme'
 
 type Tab = 'login' | 'register'
@@ -8,6 +9,7 @@ type Tab = 'login' | 'register'
 export default function Login() {
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
+  const { login } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,7 +35,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(email, password)
-      localStorage.setItem('logged_in', 'true')
+      // Auth state is now derived from the AuthProvider, not localStorage.
       navigate('/')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error

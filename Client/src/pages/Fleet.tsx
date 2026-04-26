@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTrucks, createTruck, deleteTruck, updateTruck } from '../api/trucks'
-import { logout } from '../api/auth'
 import type { Truck, TruckFormData } from '../types/truck'
 import Navbar from '../components/Navbar'
 import TruckCard from '../components/TruckCard'
 import AddTruckModal from '../components/AddTruckModal'
 import EditTruckModal from '../components/EditTruckModal'
+import { useAuth } from '../auth/AuthProvider'
 
 export default function Fleet() {
   const navigate = useNavigate()
+  const { logout } = useAuth()
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -25,7 +26,6 @@ export default function Fleet() {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 401) {
-        localStorage.removeItem('logged_in')
         navigate('/login')
       } else {
         setError('FAILED TO LOAD FLEET DATA')
@@ -39,7 +39,6 @@ export default function Fleet() {
 
   const handleLogout = async () => {
     await logout()
-    localStorage.removeItem('logged_in')
     navigate('/login')
   }
 

@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTrucks } from '../api/trucks'
 import { getExpenses, createExpense, deleteExpense } from '../api/expenses'
-import { logout } from '../api/auth'
 import type { Truck } from '../types/truck'
 import type { Expense, ExpenseFormData } from '../types/expense'
 import Navbar from '../components/Navbar'
 import AddExpenseModal from '../components/AddExpenseModal'
 import ExpenseChart from '../components/ExpenseChart'
+import { useAuth } from '../auth/AuthProvider'
 
 type Period = 'day' | 'week' | 'month' | 'all'
 
@@ -81,6 +81,7 @@ function money(n: number) {
 
 export default function Expenses() {
   const navigate = useNavigate()
+  const { logout } = useAuth()
   const [trucks, setTrucks]           = useState<Truck[]>([])
   const [expenses, setExpenses]       = useState<Expense[]>([])
   const [loading, setLoading]         = useState(true)
@@ -89,15 +90,14 @@ export default function Expenses() {
   const [filterTruck, setFilterTruck] = useState('all')
   const [period, setPeriod]           = useState<Period>('month')
 
-  const handleLogout = async () => { await logout(); localStorage.removeItem('logged_in'); navigate('/login') }
+  const handleLogout = async () => { await logout(); navigate('/login') }
 
   useEffect(() => {
-    if (!localStorage.getItem('logged_in')) { navigate('/login'); return }
     Promise.all([getTrucks(), getExpenses()])
       .then(([t, e]) => { setTrucks(t); setExpenses(e) })
       .catch((err: unknown) => {
         const status = (err as { response?: { status?: number } })?.response?.status
-        if (status === 401) { localStorage.removeItem('logged_in'); navigate('/login') }
+        if (status === 401) { navigate('/login') }
         else setError('FAILED TO LOAD DATA')
       })
       .finally(() => setLoading(false))

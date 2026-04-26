@@ -1,28 +1,79 @@
-import axios from 'axios'
+import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL: string = import.meta.env.VITE_API_URL || ''
 
+// withCredentials is mandatory: it tells the browser to send the httpOnly
+// access_token / refresh_token cookies on every request (including the
+// preflight that follows for CORS). The server CORS config already sets
+// AllowCredentials: true to accept this.
 const client = axios.create({
   baseURL: API_URL,
   withCredentials: true,
 })
 
-// Attach access token from localStorage to every request
-client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
+// Subscribers (e.g. AuthProvider) are notified when a refresh fails terminally
+// so they can transition to the anonymous state without polling localStorage.
+type AuthFailureListener = () => void
+const authFailureListeners = new Set<AuthFailureListener>()
 
+export const onAuthFailure = (listener: AuthFailureListener): (() => void) => {
+  authFailureListeners.add(listener)
+  return () => authFailureListeners.delete(listener)
+}
+
+const notifyAuthFailure = (): void => {
+  authFailureListeners.forEach((fn) => {
+    try {
+      fn()
+    } catch {
+      // Listeners must not throw — swallow to keep the chain alive.
+    }
+  })
+}
+
+// AxiosRequestConfig with our private retry flag. Avoids `any` while letting
+// us mark a request that has already been retried.
+type RetryableConfig = AxiosRequestConfig & { _retry?: boolean }
+
+// Single in-flight refresh shared across concurrent 401s. Mobile network
+// flaps can cause many parallel requests to fail at once; we must call the
+// refresh endpoint exactly once per cluster, otherwise the rotated refresh
+// token gets revoked-on-first-use and every retry fails.
 let refreshPromise: Promise<void> | null = null
+
+const performRefresh = async (): Promise<void> => {
+  // No body — the refresh token rides on the httpOnly cookie. The server
+  // sets new cookies in the response; we ignore the body entirely.
+  await axios.post(
+    `${API_URL}/api/v1/auth/refresh`,
+    {},
+    { withCredentials: true },
+  )
+}
+
+const isAuthEndpoint = (url: string | undefined): boolean => {
+  if (!url) return false
+  return (
+    url.includes('/api/v1/auth/login') ||
+    url.includes('/api/v1/auth/register') ||
+    url.includes('/api/v1/auth/refresh')
+  )
+}
 
 client.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const original = error.config
-    if (error.response?.status !== 401 || original._retry) {
+  async (error: AxiosError) => {
+    const original = error.config as RetryableConfig | undefined
+
+    // Only attempt refresh on a real 401 from a non-auth endpoint that we
+    // have not already retried. Login / refresh failures must surface to
+    // the caller so the UI can show "invalid credentials" etc.
+    if (
+      !original ||
+      error.response?.status !== 401 ||
+      original._retry ||
+      isAuthEndpoint(original.url)
+    ) {
       return Promise.reject(error)
     }
 
@@ -30,40 +81,24 @@ client.interceptors.response.use(
 
     try {
       if (!refreshPromise) {
-        const refreshToken = localStorage.getItem('refresh_token')
-        refreshPromise = axios
-          .post(
-            `${API_URL}/api/v1/auth/refresh`,
-            { refresh_token: refreshToken },
-            { withCredentials: true }
-          )
-          .then((res) => {
-            const { access_token, refresh_token } = res.data
-            if (access_token) localStorage.setItem('access_token', access_token)
-            if (refresh_token) localStorage.setItem('refresh_token', refresh_token)
-          })
+        refreshPromise = performRefresh().finally(() => {
+          refreshPromise = null
+        })
       }
-
       await refreshPromise
-      refreshPromise = null
-
-      const newToken = localStorage.getItem('access_token')
-      if (newToken) {
-        original.headers.Authorization = `Bearer ${newToken}`
-      }
-
+      // Retry the original request. Cookies were rotated by the server,
+      // so the next call carries the fresh access_token automatically.
       return client(original)
-    } catch {
-      refreshPromise = null
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('logged_in')
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/home') {
+    } catch (refreshErr) {
+      notifyAuthFailure()
+      // Avoid a redirect loop on pages that are already public.
+      const path = window.location.pathname
+      if (path !== '/login' && path !== '/home') {
         window.location.href = '/login'
       }
-      return Promise.reject(error)
+      return Promise.reject(refreshErr)
     }
-  }
+  },
 )
 
 export default client

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
+import { useAuth } from '../auth/AuthProvider'
 
 const features = [
   {
@@ -27,7 +28,8 @@ const features = [
 export default function Home() {
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
-  const loggedIn = localStorage.getItem('logged_in')
+  const { status } = useAuth()
+  const loggedIn = status === 'authed'
 
   return (
     <div className="home-page">
