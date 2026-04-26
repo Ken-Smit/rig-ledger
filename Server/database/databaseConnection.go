@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"log"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -13,15 +14,16 @@ var client *mongo.Client
 // Connect initializes the MongoDB connection
 func Connect(mongoURI string) {
 	var err error
-	opts := options.Client().ApplyURI(mongoURI)
+	opts := options.Client().ApplyURI(mongoURI).SetServerSelectionTimeout(10 * time.Second)
 	client, err = mongo.Connect(opts)
 	if err != nil {
 		log.Fatal("Failed to connect to MongoDB:", err)
 	}
 
-	// Test the connection
-	err = client.Ping(context.Background(), nil)
-	if err != nil {
+	// Test the connection with a bounded timeout so we fail fast on bad URIs / blocked IPs
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err = client.Ping(ctx, nil); err != nil {
 		log.Fatal("Failed to ping MongoDB:", err)
 	}
 
