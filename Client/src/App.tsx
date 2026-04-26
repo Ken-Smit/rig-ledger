@@ -7,7 +7,8 @@ import Fleet from './pages/Fleet'
 import Expenses from './pages/Expenses'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  return localStorage.getItem('logged_in') ? <>{children}</> : <Navigate to="/home" replace />
+  const authed = localStorage.getItem('logged_in') && localStorage.getItem('access_token')
+  return authed ? <>{children}</> : <Navigate to="/home" replace />
 }
 
 export default function App() {

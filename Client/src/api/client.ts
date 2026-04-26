@@ -58,6 +58,9 @@ client.interceptors.response.use(
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('logged_in')
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/home') {
+        window.location.href = '/login'
+      }
       return Promise.reject(error)
     }
   }
