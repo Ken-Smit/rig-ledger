@@ -7,13 +7,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// dbTimeout is a soft per-request ceiling for any single MongoDB operation
-// initiated from a Gin handler. CLAUDE.md mandates timeouts on all DB calls so
-// a slow primary, network blip, or runaway query cannot pin a goroutine
-// indefinitely. 5 seconds is a starting cap for OLTP-style reads/writes — tune
-// downward if p99 stays well below this, or upward (per call site) only when a
-// specific operation is known to be legitimately slow.
-const dbTimeout = 5 * time.Second
+// dbTimeout is a soft per-request ceiling for the SUM of MongoDB operations a
+// single Gin handler may issue. CLAUDE.md mandates bounded DB calls so a slow
+// primary, network blip, or runaway query cannot pin a goroutine indefinitely.
+//
+// 10s budget covers the worst case observed on Render free tier (0.5 CPU,
+// cold Atlas connection): SRV resolve + TLS handshake + auth ≈ 3-5s on first
+// request after idle, plus subsequent ops in the same handler. Tighten once
+// the deploy moves off the free tier or a connection-prewarm is added.
+const dbTimeout = 10 * time.Second
 
 // dbCtx returns a context derived from the inbound request that is also bounded
 // by dbTimeout. Callers MUST defer the returned cancel func to release the

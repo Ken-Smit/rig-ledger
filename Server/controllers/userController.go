@@ -86,6 +86,7 @@ func Register(c *gin.Context) {
 		return
 	}
 	if err != mongo.ErrNoDocuments {
+		log.Printf("Register: dup-check failed email=%s: %v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
 		return
 	}
@@ -94,6 +95,7 @@ func Register(c *gin.Context) {
 	// a user document with an empty password hash.
 	hashedPassword, err := HashPassword(req.Password)
 	if err != nil {
+		log.Printf("Register: bcrypt failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
 		return
 	}
@@ -110,6 +112,7 @@ func Register(c *gin.Context) {
 	}
 
 	if _, err := userCollection.InsertOne(ctx, user); err != nil {
+		log.Printf("Register: insert failed email=%s: %v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
 		return
 	}

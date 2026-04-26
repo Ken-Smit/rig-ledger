@@ -84,6 +84,9 @@ func configureTrustedProxies(router *gin.Engine) {
 			"172.16.0.0/12",
 			"192.168.0.0/16",
 			"127.0.0.1/32",
+			"::1/128",     // IPv6 loopback (Render's internal proxy hop)
+			"fc00::/7",    // IPv6 unique-local (RFC4193)
+			"fe80::/10",   // IPv6 link-local
 		}); err != nil {
 			log.Fatalf("failed to configure trusted proxies: %v", err)
 		}
