@@ -2,8 +2,11 @@ package controllers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Ken-Smit/RigLedgerServer/database"
@@ -48,6 +51,51 @@ func VerifyPassword(hashedPassword, plaintextPassword string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(plaintextPassword)) == nil
 }
 
+// registrationFieldLabels maps RegisterRequest struct field names to the
+// human-readable labels surfaced to the client. Keep keys in sync with
+// models.RegisterRequest.
+var registrationFieldLabels = map[string]string{
+	"FirstName": "First name",
+	"LastName":  "Last name",
+	"Email":     "Email",
+	"Password":  "Password",
+}
+
+// registrationErrorMessage translates a validator error into plain-English copy
+// a non-technical operator can act on. Falls back to a generic message if the
+// error is not a ValidationErrors (e.g. raw JSON bind failure) so internal
+// details are never leaked verbatim.
+func registrationErrorMessage(err error) string {
+	var vErrs validator.ValidationErrors
+	if !errors.As(err, &vErrs) {
+		return "Please check your registration details and try again"
+	}
+	msgs := make([]string, 0, len(vErrs))
+	for _, fe := range vErrs {
+		label, ok := registrationFieldLabels[fe.Field()]
+		if !ok {
+			label = fe.Field()
+		}
+		switch fe.Tag() {
+		case "required":
+			msgs = append(msgs, fmt.Sprintf("%s is required", label))
+		case "email":
+			msgs = append(msgs, "Please enter a valid email address")
+		case "min":
+			if fe.Field() == "Password" {
+				msgs = append(msgs, fmt.Sprintf("Password must be at least %s characters", fe.Param()))
+			} else {
+				msgs = append(msgs, fmt.Sprintf("%s must be at least %s characters", label, fe.Param()))
+			}
+		case "max":
+			msgs = append(msgs, fmt.Sprintf("%s must be no more than %s characters", label, fe.Param()))
+		default:
+			msgs = append(msgs, fmt.Sprintf("%s is invalid", label))
+		}
+	}
+	return strings.Join(msgs, ". ")
+}
+
 // Register creates a new user from a strictly-scoped RegisterRequest DTO.
 //
 // SECURITY: binds RegisterRequest (NOT models.User) so a registrant cannot
@@ -56,11 +104,11 @@ func VerifyPassword(hashedPassword, plaintextPassword string) bool {
 func Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		badRequest(c, err, "Invalid registration payload")
+		badRequest(c, err, "Please check your registration details and try again")
 		return
 	}
 	if err := userValidator.Struct(req); err != nil {
-		badRequest(c, err, "Invalid registration payload")
+		badRequest(c, err, registrationErrorMessage(err))
 		return
 	}
 

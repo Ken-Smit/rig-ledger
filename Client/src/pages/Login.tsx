@@ -188,8 +188,10 @@ export default function Login() {
                 value={regPassword}
                 onChange={e => setRegPassword(e.target.value)}
                 placeholder="••••••••"
+                minLength={12}
                 required
               />
+              <small className="field-hint">Must be at least 12 characters.</small>
             </div>
 
             {error && <div className="login-error">{error}</div>}
