@@ -19,7 +19,7 @@ type User struct {
 	FirstName    string        `bson:"first_name" json:"first_name" validate:"required,min=2,max=100"`
 	LastName     string        `bson:"last_name" json:"last_name" validate:"required,min=2,max=100"`
 	Email        string        `bson:"email" json:"email" validate:"required,email"`
-	Password     string        `bson:"password" json:"-" validate:"required,min=6"`
+	Password     string        `bson:"password" json:"-" validate:"required,min=12"`
 	CreatedAt    time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time     `bson:"updated_at" json:"updated_at"`
 	RefreshToken string        `bson:"refresh_token" json:"-"`
@@ -36,7 +36,7 @@ type RegisterRequest struct {
 	FirstName string `json:"first_name" validate:"required,min=2,max=100"`
 	LastName  string `json:"last_name"  validate:"required,min=2,max=100"`
 	Email     string `json:"email"      validate:"required,email"`
-	Password  string `json:"password"   validate:"required,min=6"`
+	Password  string `json:"password"   validate:"required,min=12"`
 }
 
 // UserLogin is the request DTO for POST /login.

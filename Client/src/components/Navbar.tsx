@@ -6,8 +6,8 @@ interface Props {
 }
 
 const TABS = [
-  { to: '/',         label: 'DASHBOARD' },
-  { to: '/fleet',    label: 'FLEET'     },
+  { to: '/',         label: 'Dashboard' },
+  { to: '/fleet',    label: 'Fleet'     },
   { to: '/expenses', label: 'P&L'       },
 ]
 
@@ -19,13 +19,13 @@ export default function Navbar({ onLogout }: Props) {
       <div className="nav-logo">
         <span className="nav-logo-mark">⬡</span>
         <span className="nav-logo-text">
-          RIG<span className="cyan">LEDGER</span>
+          Rig<span className="cyan">Ledger</span>
         </span>
       </div>
 
       <div className="nav-center">
         <span className="nav-status-dot" />
-        <span className="text-dim">SYSTEM ONLINE</span>
+        <span className="text-dim">System Online</span>
       </div>
 
       <div className="nav-right">
@@ -44,12 +44,12 @@ export default function Navbar({ onLogout }: Props) {
         <button
           className="btn-ghost btn-sm nav-theme-toggle"
           onClick={toggle}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {theme === 'dark' ? '☀' : '☾'}
         </button>
         <button className="btn-ghost btn-sm" onClick={onLogout}>
-          ⏻ <span className="nav-logout-label">LOGOUT</span>
+          ⏻ <span className="nav-logout-label">Logout</span>
         </button>
       </div>
     </nav>

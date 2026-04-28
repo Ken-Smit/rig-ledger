@@ -62,34 +62,34 @@ export default function TruckCard({ truck, onEdit, onDelete }: Props) {
 
       <div className="tc-data">
         <div className="tc-row">
-          <span className="tc-key">ANNUAL INSP</span>
+          <span className="tc-key">Annual Insp.</span>
           <span className="tc-val">{fmt(truck.annual_inspection_date)}</span>
         </div>
         <div className="tc-row">
-          <span className="tc-key">OIL CHANGE</span>
+          <span className="tc-key">Oil Change</span>
           <span className="tc-val">{fmt(truck.last_oil_change_date)}</span>
         </div>
         <div className="tc-row">
-          <span className="tc-key">BRAKE INSP</span>
+          <span className="tc-key">Brake Insp.</span>
           <span className="tc-val">{fmt(truck.brake_inspection_date)}</span>
         </div>
         {truck.last_oil_change_mileage != null && (
           <div className="tc-row">
-            <span className="tc-key">LAST OIL MI</span>
+            <span className="tc-key">Last Oil Mi</span>
             <span className="tc-val">{truck.last_oil_change_mileage.toLocaleString()} mi</span>
           </div>
         )}
         {truck.last_tire_rotation_date && (
           <div className="tc-row">
-            <span className="tc-key">TIRE ROTATE</span>
+            <span className="tc-key">Tire Rotation</span>
             <span className="tc-val">{fmt(truck.last_tire_rotation_date)}</span>
           </div>
         )}
       </div>
 
       <div className="tc-actions" onClick={e => e.stopPropagation()}>
-        <button className="btn-ghost btn-sm" onClick={onEdit}>✎ EDIT</button>
-        <button className="btn-danger btn-sm" onClick={onDelete}>✕ REMOVE</button>
+        <button className="btn-ghost btn-sm" onClick={onEdit}>✎ Edit</button>
+        <button className="btn-danger btn-sm" onClick={onDelete}>✕ Remove</button>
       </div>
     </div>
   )

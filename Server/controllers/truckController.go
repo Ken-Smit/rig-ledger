@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -18,7 +19,11 @@ var truckValidator *validator.Validate
 
 func init() {
 	truckValidator = validator.New()
-	truckValidator.RegisterValidation("truckyear", models.ValidateTruckYear)
+	// Init-time misregistration is a programmer bug, not a runtime condition.
+	// Panic so a degraded validator never silently accepts arbitrary year values.
+	if err := truckValidator.RegisterValidation("truckyear", models.ValidateTruckYear); err != nil {
+		panic(fmt.Sprintf("failed to register truckyear validator: %v", err))
+	}
 }
 
 // GetTruck returns a single truck owned by the authenticated user.

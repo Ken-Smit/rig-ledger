@@ -57,7 +57,7 @@ export default function AddTruckModal({ onSave, onClose }: Props) {
       await onSave(payload)
       onClose()
     } catch {
-      setError('FAILED TO CREATE UNIT')
+      setError('Failed to Create Unit')
       setSaving(false)
     }
   }
@@ -69,29 +69,29 @@ export default function AddTruckModal({ onSave, onClose }: Props) {
         <div className="modal-bracket-br" />
 
         <div className="modal-header">
-          <span className="modal-title">ADD UNIT</span>
+          <span className="modal-title">Add Unit</span>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
         <form className="modal-form" onSubmit={handleSubmit}>
-          <div className="modal-section-label">IDENTITY</div>
+          <div className="modal-section-label">Identity</div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">YEAR *</label>
+              <label className="field-label">Year *</label>
               <input className="field-input" type="number" value={form.year} onChange={set('year')} required min={1900} max={2100} placeholder="2024" />
             </div>
             <div className="field-group">
-              <label className="field-label">UNIT #</label>
+              <label className="field-label">Unit #</label>
               <input className="field-input" type="text" value={form.unit_number} onChange={set('unit_number')} placeholder="optional" />
             </div>
           </div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">MAKE *</label>
+              <label className="field-label">Make *</label>
               <input className="field-input" type="text" value={form.make} onChange={set('make')} required placeholder="Freightliner" />
             </div>
             <div className="field-group">
-              <label className="field-label">MODEL *</label>
+              <label className="field-label">Model *</label>
               <input className="field-input" type="text" value={form.model} onChange={set('model')} required placeholder="Cascadia" />
             </div>
           </div>
@@ -100,69 +100,69 @@ export default function AddTruckModal({ onSave, onClose }: Props) {
             <input className="field-input" type="text" value={form.vin} onChange={set('vin')} placeholder="optional" />
           </div>
 
-          <div className="modal-section-label" style={{ marginTop: 16 }}>MAINTENANCE</div>
+          <div className="modal-section-label" style={{ marginTop: 16 }}>Maintenance</div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">ANNUAL INSPECTION</label>
+              <label className="field-label">Annual Inspection</label>
               <input className="field-input" type="date" value={form.annual_inspection_date} onChange={set('annual_inspection_date')} />
             </div>
             <div className="field-group">
-              <label className="field-label">BRAKE INSPECTION</label>
+              <label className="field-label">Brake Inspection</label>
               <input className="field-input" type="date" value={form.brake_inspection_date} onChange={set('brake_inspection_date')} />
             </div>
           </div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">OIL CHANGE DATE</label>
+              <label className="field-label">Oil Change Date</label>
               <input className="field-input" type="date" value={form.last_oil_change_date} onChange={set('last_oil_change_date')} />
             </div>
             <div className="field-group">
-              <label className="field-label">OIL CHANGE MILEAGE</label>
+              <label className="field-label">Oil Change Mileage</label>
               <input className="field-input" type="number" value={form.last_oil_change_mileage} onChange={set('last_oil_change_mileage')} placeholder="optional" min={0} />
             </div>
           </div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">OIL CHANGE INTERVAL (MI)</label>
+              <label className="field-label">Oil Change Interval (mi)</label>
               <input className="field-input" type="number" value={form.oil_change_interval} onChange={set('oil_change_interval')} placeholder="optional" min={0} />
             </div>
             <div className="field-group">
-              <label className="field-label">TIRE ROTATION</label>
+              <label className="field-label">Tire Rotation</label>
               <input className="field-input" type="date" value={form.last_tire_rotation_date} onChange={set('last_tire_rotation_date')} />
             </div>
           </div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">COOLANT FLUSH</label>
+              <label className="field-label">Coolant Flush</label>
               <input className="field-input" type="date" value={form.coolant_flush_date} onChange={set('coolant_flush_date')} />
             </div>
             <div className="field-group">
-              <label className="field-label">TRANSMISSION SERVICE</label>
+              <label className="field-label">Transmission Service</label>
               <input className="field-input" type="date" value={form.transmission_service_date} onChange={set('transmission_service_date')} />
             </div>
           </div>
-          <div className="modal-section-label" style={{ marginTop: 16 }}>TIRES</div>
+          <div className="modal-section-label" style={{ marginTop: 16 }}>Tires</div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">TIRE BRAND</label>
+              <label className="field-label">Tire Brand</label>
               <input className="field-input" type="text" value={form.tire_brand} onChange={set('tire_brand')} placeholder="optional" />
             </div>
             <div className="field-group">
-              <label className="field-label">TIRE MODEL</label>
+              <label className="field-label">Tire Model</label>
               <input className="field-input" type="text" value={form.tire_model} onChange={set('tire_model')} placeholder="optional" />
             </div>
           </div>
           <div className="field-group">
-            <label className="field-label">TIRE SIZE</label>
+            <label className="field-label">Tire Size</label>
             <input className="field-input" type="text" value={form.tire_size} onChange={set('tire_size')} placeholder="optional" />
           </div>
 
           {error && <div className="login-error">{error}</div>}
 
           <div className="modal-actions">
-            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>CANCEL</button>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'DEPLOYING...' : 'DEPLOY UNIT'}
+              {saving ? 'Adding...' : 'Add Unit'}
             </button>
           </div>
         </form>

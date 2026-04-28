@@ -12,9 +12,9 @@ import { useAuth } from '../auth/AuthProvider'
 type Period = 'day' | 'week' | 'month' | 'all'
 
 const TYPE_LABEL: Record<string, string> = {
-  fuel:        'FUEL',
-  maintenance: 'MAINTENANCE',
-  income:      'INCOME',
+  fuel:        'Fuel',
+  maintenance: 'Maintenance',
+  income:      'Income',
 }
 
 const TYPE_CLASS: Record<string, string> = {
@@ -68,7 +68,7 @@ function periodLabel(period: Period): string {
   if (period === 'month') {
     return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   }
-  return 'ALL TIME'
+  return 'All Time'
 }
 
 function fmt(d: string) {
@@ -98,7 +98,7 @@ export default function Expenses() {
       .catch((err: unknown) => {
         const status = (err as { response?: { status?: number } })?.response?.status
         if (status === 401) { navigate('/login') }
-        else setError('FAILED TO LOAD DATA')
+        else setError('Failed to Load Data')
       })
       .finally(() => setLoading(false))
   }, [navigate])
@@ -109,12 +109,12 @@ export default function Expenses() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('REMOVE THIS ENTRY?')) return
+    if (!confirm('Remove This Entry?')) return
     try {
       await deleteExpense(id)
       setExpenses(prev => prev.filter(e => e._id !== id))
     } catch {
-      setError('FAILED TO REMOVE ENTRY')
+      setError('Failed to Remove Entry')
     }
   }
 
@@ -154,7 +154,7 @@ export default function Expenses() {
               <p className="section-sub">{periodLabel(period)}</p>
             </div>
             <button className="btn-primary" onClick={() => setShowAdd(true)} disabled={trucks.length === 0}>
-              + ADD ENTRY
+              + Add Entry
             </button>
           </div>
 
@@ -166,7 +166,7 @@ export default function Expenses() {
           {/* Consolidated P&L card */}
           <div className="exp-summary">
             <div className="pl-card">
-              <div className="pl-net-label">NET</div>
+              <div className="pl-net-label">Net</div>
               <div className={`pl-net-value ${net >= 0 ? 'text-cyan' : 'text-red'}`}>
                 {money(net)}
               </div>
@@ -177,21 +177,21 @@ export default function Expenses() {
                 <div className="pl-row">
                   <span className="pl-row-label text-cyan">
                     <span className="pl-row-icon">▲</span>
-                    LOAD INCOME
+                    Load Income
                   </span>
                   <span className="pl-row-value text-cyan">{money(totals.income)}</span>
                 </div>
                 <div className="pl-row">
                   <span className="pl-row-label text-red">
                     <span className="pl-row-icon">▼</span>
-                    FUEL COSTS
+                    Fuel Costs
                   </span>
                   <span className="pl-row-value text-red">{money(totals.fuel)}</span>
                 </div>
                 <div className="pl-row">
                   <span className="pl-row-label text-red">
                     <span className="pl-row-icon">▼</span>
-                    MAINTENANCE
+                    Maintenance
                   </span>
                   <span className="pl-row-value text-red">{money(totals.maintenance)}</span>
                 </div>
@@ -202,13 +202,13 @@ export default function Expenses() {
           {/* Truck filter */}
           {trucks.length > 0 && (
             <div className="exp-filter">
-              <span className="exp-filter-label">FILTER BY UNIT</span>
+              <span className="exp-filter-label">Filter by Unit</span>
               <select
                 className="field-input field-select exp-filter-select"
                 value={filterTruck}
                 onChange={e => setFilterTruck(e.target.value)}
               >
-                <option value="all">ALL UNITS</option>
+                <option value="all">All Units</option>
                 {trucks.map(t => (
                   <option key={t._id} value={t._id}>
                     {t.unit_number ?? `UNIT-${t._id.slice(-4).toUpperCase()}`} — {t.year} {t.make} {t.model}
@@ -222,22 +222,22 @@ export default function Expenses() {
           {loading ? (
             <div className="loading-state">
               <div className="loading-spinner" />
-              <p>LOADING RECORDS...</p>
+              <p>Loading...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">⬡</div>
-              <p>NO ENTRIES</p>
-              <p className="text-dim">No records for this period</p>
+              <p>No Entries</p>
+              <p className="text-dim">No Records for This Period</p>
             </div>
           ) : (
             <div className="exp-table">
               <div className="exp-table-head">
-                <span>DATE</span>
-                <span>UNIT</span>
-                <span>TYPE</span>
-                <span>DESCRIPTION</span>
-                <span className="exp-col-right">AMOUNT</span>
+                <span>Date</span>
+                <span>Unit</span>
+                <span>Type</span>
+                <span>Description</span>
+                <span className="exp-col-right">Amount</span>
                 <span />
               </div>
               {filtered.map(exp => (
