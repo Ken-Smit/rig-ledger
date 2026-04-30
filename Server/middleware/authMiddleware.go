@@ -40,14 +40,19 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		userID, err := utils.ValidateAccessToken(tokenString)
+		userID, role, fleetID, err := utils.ValidateAccessToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
 			return
 		}
 
+		// Downstream handlers and the RequireOwner gate read these three keys
+		// directly from the context. Setting all three here means no handler
+		// has to redecode the token or hit the DB just to authorize.
 		c.Set("userID", userID)
+		c.Set("role", role)
+		c.Set("fleetID", fleetID)
 		c.Next()
 	}
 }

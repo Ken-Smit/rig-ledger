@@ -26,14 +26,14 @@ func init() {
 	}
 }
 
-// GetTruck returns a single truck owned by the authenticated user.
+// GetTruck returns a single truck inside the caller's fleet.
 //
-// Ownership is enforced by including user_id in the lookup filter — a request
-// for another user's truck ID matches zero documents and returns 404,
+// Ownership is enforced by including fleet_id in the lookup filter — a request
+// for another fleet's truck ID matches zero documents and returns 404,
 // indistinguishable from a truly nonexistent truck (no existence-oracle leak).
 func GetTruck(c *gin.Context) {
-	userID := c.GetString("userID")
-	if userID == "" {
+	fleetID := c.GetString("fleetID")
+	if fleetID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -49,13 +49,13 @@ func GetTruck(c *gin.Context) {
 	truckCollection := database.GetTruckCollection()
 
 	var truck models.Truck
-	err = truckCollection.FindOne(ctx, bson.M{"_id": objID, "user_id": userID}).Decode(&truck)
+	err = truckCollection.FindOne(ctx, bson.M{"_id": objID, "fleet_id": fleetID}).Decode(&truck)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Truck not found"})
 		return
 	}
 	if err != nil {
-		log.Printf("GetTruck: find failed user=%s truck=%s: %v", userID, objID.Hex(), err)
+		log.Printf("GetTruck: find failed fleet=%s truck=%s: %v", fleetID, objID.Hex(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch truck"})
 		return
 	}
@@ -63,13 +63,13 @@ func GetTruck(c *gin.Context) {
 	c.JSON(http.StatusOK, truck)
 }
 
-// GetUserTrucks returns the authenticated user's fleet, paged.
+// GetUserTrucks returns the caller's fleet roster, paged.
 //
 // Pagination: ?page=N&page_size=M. Defaults page=1, page_size=25, max=100.
 // Total count exposed via X-Total-Count for paged-UI wiring.
 func GetUserTrucks(c *gin.Context) {
-	userID := c.GetString("userID")
-	if userID == "" {
+	fleetID := c.GetString("fleetID")
+	if fleetID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -84,11 +84,11 @@ func GetUserTrucks(c *gin.Context) {
 	defer cancel()
 	truckCollection := database.GetTruckCollection()
 
-	filter := bson.M{"user_id": userID}
+	filter := bson.M{"fleet_id": fleetID}
 
 	total, err := truckCollection.CountDocuments(ctx, filter)
 	if err != nil {
-		log.Printf("GetUserTrucks: count failed user=%s: %v", userID, err)
+		log.Printf("GetUserTrucks: count failed fleet=%s: %v", fleetID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch trucks"})
 		return
 	}
@@ -100,7 +100,7 @@ func GetUserTrucks(c *gin.Context) {
 
 	cursor, err := truckCollection.Find(ctx, filter, opts)
 	if err != nil {
-		log.Printf("GetUserTrucks: find failed user=%s: %v", userID, err)
+		log.Printf("GetUserTrucks: find failed fleet=%s: %v", fleetID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch trucks"})
 		return
 	}
@@ -108,7 +108,7 @@ func GetUserTrucks(c *gin.Context) {
 
 	trucks := []models.Truck{}
 	if err := cursor.All(ctx, &trucks); err != nil {
-		log.Printf("GetUserTrucks: decode failed user=%s: %v", userID, err)
+		log.Printf("GetUserTrucks: decode failed fleet=%s: %v", fleetID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode trucks"})
 		return
 	}
@@ -117,9 +117,16 @@ func GetUserTrucks(c *gin.Context) {
 	c.JSON(http.StatusOK, trucks)
 }
 
+// CreateTruck inserts a new truck record into the caller's fleet.
+//
+// SECURITY: pins fleet_id (tenancy boundary) and user_id (creator audit) from
+// the JWT context, never from client input. ID is freshly minted server-side.
+// Validation runs after the strip-and-pin so callers cannot smuggle a different
+// fleet/user via mass-assignment.
 func CreateTruck(c *gin.Context) {
 	userID := c.GetString("userID")
-	if userID == "" {
+	fleetID := c.GetString("fleetID")
+	if userID == "" || fleetID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -130,13 +137,16 @@ func CreateTruck(c *gin.Context) {
 		return
 	}
 
+	// Strip + pin server-controlled identity fields BEFORE validation.
+	// See UpdateTruck for the same defense applied to the patch path.
+	truck.ID = bson.NewObjectID()
+	truck.UserID = userID
+	truck.FleetID = fleetID
+
 	if err := truckValidator.Struct(truck); err != nil {
 		badRequest(c, err, "Invalid truck data")
 		return
 	}
-
-	truck.ID = bson.NewObjectID()
-	truck.UserID = userID
 
 	ctx, cancel := dbCtx(c)
 	defer cancel()
@@ -144,7 +154,7 @@ func CreateTruck(c *gin.Context) {
 
 	_, err := truckCollection.InsertOne(ctx, truck)
 	if err != nil {
-		log.Printf("CreateTruck: insert failed user=%s: %v", userID, err)
+		log.Printf("CreateTruck: insert failed fleet=%s user=%s: %v", fleetID, userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create truck"})
 		return
 	}
@@ -152,9 +162,21 @@ func CreateTruck(c *gin.Context) {
 	c.JSON(http.StatusCreated, truck)
 }
 
+// UpdateTruck patches a truck the caller's fleet owns.
+//
+// SECURITY: strips caller-controlled identity fields BEFORE the $set so a
+// caller cannot send {"user_id": "<victim>"}, {"fleet_id": "<other_fleet>"},
+// or {"_id": "..."} to transfer the truck record into another tenant or
+// corrupt the document key. The bson:"...,omitempty" tags on Truck mean the
+// zero values below are omitted from the BSON update document; the Mongo
+// filter pins fleet_id so the lookup itself is tenant-scoped.
+//
+// (A dedicated TruckUpdate DTO would be stricter, but Truck has 20+ optional
+// fields and a parallel struct would double maintenance burden. Revisit if
+// new auth-scoped fields are added.)
 func UpdateTruck(c *gin.Context) {
-	userID := c.GetString("userID")
-	if userID == "" {
+	fleetID := c.GetString("fleetID")
+	if fleetID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -171,19 +193,12 @@ func UpdateTruck(c *gin.Context) {
 		return
 	}
 
-	// SECURITY: strip caller-controlled identity fields BEFORE the $set.
-	// Without this, a caller could send {"user_id": "<victim>"} and transfer
-	// the truck record into another user's account, or set "_id" and corrupt
-	// the document key. The bson:"...,omitempty" tags on Truck mean the zero
-	// values below are omitted from the BSON update document, while pinning
-	// UserID to the authenticated subject keeps the field internally consistent.
-	// (A dedicated TruckUpdate DTO would be stricter, but Truck has 20+ optional
-	// fields and a parallel struct would double maintenance burden. Revisit if
-	// new auth-scoped fields are added — e.g. an org_id would require a DTO.)
+	// Strip caller-controlled identity. Zero values are dropped via omitempty.
 	updateData.ID = bson.ObjectID{}
-	updateData.UserID = userID
+	updateData.UserID = ""
+	updateData.FleetID = ""
 
-	// Only validate Year if provided — it must not exceed next year
+	// Only validate Year if provided — it must not exceed next year.
 	if updateData.Year != 0 {
 		if err := truckValidator.StructPartial(updateData, "Year"); err != nil {
 			badRequest(c, err, "Invalid truck data")
@@ -196,11 +211,11 @@ func UpdateTruck(c *gin.Context) {
 	truckCollection := database.GetTruckCollection()
 
 	result, err := truckCollection.UpdateOne(ctx,
-		bson.M{"_id": objID, "user_id": userID},
+		bson.M{"_id": objID, "fleet_id": fleetID},
 		bson.M{"$set": updateData},
 	)
 	if err != nil {
-		log.Printf("UpdateTruck: update failed user=%s truck=%s: %v", userID, objID.Hex(), err)
+		log.Printf("UpdateTruck: update failed fleet=%s truck=%s: %v", fleetID, objID.Hex(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update truck"})
 		return
 	}
@@ -212,9 +227,10 @@ func UpdateTruck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Truck updated successfully"})
 }
 
+// DeleteTruck removes a truck from the caller's fleet.
 func DeleteTruck(c *gin.Context) {
-	userID := c.GetString("userID")
-	if userID == "" {
+	fleetID := c.GetString("fleetID")
+	if fleetID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -229,9 +245,9 @@ func DeleteTruck(c *gin.Context) {
 	defer cancel()
 	truckCollection := database.GetTruckCollection()
 
-	result, err := truckCollection.DeleteOne(ctx, bson.M{"_id": objID, "user_id": userID})
+	result, err := truckCollection.DeleteOne(ctx, bson.M{"_id": objID, "fleet_id": fleetID})
 	if err != nil {
-		log.Printf("DeleteTruck: delete failed user=%s truck=%s: %v", userID, objID.Hex(), err)
+		log.Printf("DeleteTruck: delete failed fleet=%s truck=%s: %v", fleetID, objID.Hex(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete truck"})
 		return
 	}

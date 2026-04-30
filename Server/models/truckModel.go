@@ -18,6 +18,10 @@ type TirePosition struct {
 type Truck struct {
 	ID     bson.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
 	UserID string        `bson:"user_id,omitempty" json:"user_id,omitempty"`
+	// FleetID scopes the truck to a fleet. Set at creation to the owner's
+	// FleetID and never mutated thereafter. Drivers inherit read access to
+	// every truck sharing their FleetID; cross-fleet reads return 404.
+	FleetID string `bson:"fleet_id,omitempty" json:"fleet_id,omitempty"`
 
 	// Identity
 	Year       uint16 `bson:"year" json:"year" validate:"required,min=1900,truckyear"`

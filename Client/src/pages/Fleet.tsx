@@ -6,16 +6,25 @@ import Navbar from '../components/Navbar'
 import TruckCard from '../components/TruckCard'
 import AddTruckModal from '../components/AddTruckModal'
 import EditTruckModal from '../components/EditTruckModal'
+import { MileageLogModal } from '../components/MileageLogModal'
 import { useAuth } from '../auth/AuthProvider'
+import { ROLE_OWNER } from '../types/user'
+
+function unitLabelFor(t: Truck): string {
+  return t.unit_number ?? `UNIT-${t._id.slice(-4).toUpperCase()}`
+}
 
 export default function Fleet() {
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
+  const isOwner = user?.role === ROLE_OWNER
+
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingTruck, setEditingTruck] = useState<Truck | null>(null)
+  const [mileageTruck, setMileageTruck] = useState<Truck | null>(null)
 
   const fetchTrucks = useCallback(async () => {
     setLoading(true)
@@ -75,9 +84,11 @@ export default function Fleet() {
                 {trucks.length} unit{trucks.length !== 1 ? 's' : ''} on record
               </p>
             </div>
-            <button className="btn-primary" onClick={() => setShowAddModal(true)}>
-              + Add Unit
-            </button>
+            {isOwner && (
+              <button className="btn-primary" onClick={() => setShowAddModal(true)}>
+                + Add Unit
+              </button>
+            )}
           </div>
 
           {error && <div className="alert-error">{error}</div>}
@@ -91,7 +102,11 @@ export default function Fleet() {
             <div className="empty-state">
               <div className="empty-icon">⬡</div>
               <p>No units yet</p>
-              <p className="text-dim">Add your first unit to begin tracking</p>
+              <p className="text-dim">
+                {isOwner
+                  ? 'Add your first unit to begin tracking'
+                  : 'Your fleet owner hasn\'t added any units yet'}
+              </p>
             </div>
           ) : (
             <div className="truck-grid">
@@ -99,8 +114,18 @@ export default function Fleet() {
                 <TruckCard
                   key={truck._id}
                   truck={truck}
-                  onEdit={() => setEditingTruck(truck)}
-                  onDelete={() => handleDelete(truck._id)}
+                  onEdit={isOwner ? () => setEditingTruck(truck) : undefined}
+                  onDelete={isOwner ? () => handleDelete(truck._id) : undefined}
+                  actions={
+                    isOwner ? undefined : (
+                      <button
+                        className="btn-primary btn-sm"
+                        onClick={() => setMileageTruck(truck)}
+                      >
+                        Log Mileage
+                      </button>
+                    )
+                  }
                 />
               ))}
             </div>
@@ -108,18 +133,28 @@ export default function Fleet() {
         </main>
       </div>
 
-      {showAddModal && (
+      {isOwner && showAddModal && (
         <AddTruckModal
           onSave={handleAddSave}
           onClose={() => setShowAddModal(false)}
         />
       )}
 
-      {editingTruck && (
+      {isOwner && editingTruck && (
         <EditTruckModal
           truck={editingTruck}
           onSave={handleEditSave}
           onClose={() => setEditingTruck(null)}
+        />
+      )}
+
+      {mileageTruck && (
+        <MileageLogModal
+          truckId={mileageTruck._id}
+          truckLabel={unitLabelFor(mileageTruck)}
+          isOpen={true}
+          onClose={() => setMileageTruck(null)}
+          onSaved={() => setMileageTruck(null)}
         />
       )}
     </>

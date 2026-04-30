@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/middleware"
@@ -20,6 +22,11 @@ const (
 	envJWTSecret          = "JWT_SECRET"
 	envMongoURI           = "MONGODB_URI"
 	envPort               = "PORT"
+
+	// startupMigrationTimeout caps how long we'll spend backfilling legacy
+	// users into the new role/fleet model before failing startup. Mirrors the
+	// 60s ceiling enforced inside the database package.
+	startupMigrationTimeout = 60 * time.Second
 )
 
 func main() {
@@ -37,6 +44,17 @@ func main() {
 		log.Fatal("MONGODB_URI environment variable not set")
 	}
 	database.Connect(mongoURI)
+
+	// Backfill legacy users into the role/fleet model. Idempotent — re-runs
+	// after every restart are no-ops once every user is migrated. Failure is
+	// fatal: starting up against a partially-migrated dataset would let
+	// pre-migration users in without a role claim and break authorization
+	// invariants downstream.
+	migrationCtx, cancelMigration := context.WithTimeout(context.Background(), startupMigrationTimeout)
+	defer cancelMigration()
+	if err := database.RunMigration(migrationCtx); err != nil {
+		log.Fatalf("Failed to run startup migration: %v", err)
+	}
 
 	router := gin.Default()
 	configureTrustedProxies(router)

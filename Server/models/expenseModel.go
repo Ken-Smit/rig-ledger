@@ -12,11 +12,15 @@ const (
 )
 
 type Expense struct {
-	ID          bson.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
-	UserID      string        `bson:"user_id,omitempty" json:"user_id,omitempty"`
-	TruckID     string        `bson:"truck_id" json:"truck_id"`
-	Type        ExpenseType   `bson:"type" json:"type"` // "fuel" | "maintenance" | "income"
-	Amount      float64       `bson:"amount" json:"amount"`
-	Date        string        `bson:"date" json:"date"`
-	Description string        `bson:"description,omitempty" json:"description,omitempty"`
+	ID     bson.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
+	UserID string        `bson:"user_id,omitempty" json:"user_id,omitempty"`
+	// FleetID scopes the expense to a fleet. Set at creation from the owner's
+	// FleetID and never mutated thereafter. All list/read queries filter by
+	// FleetID so a user cannot see another fleet's financial data.
+	FleetID     string      `bson:"fleet_id,omitempty" json:"fleet_id,omitempty"`
+	TruckID     string      `bson:"truck_id" json:"truck_id"`
+	Type        ExpenseType `bson:"type" json:"type"` // "fuel" | "maintenance" | "income"
+	Amount      float64     `bson:"amount" json:"amount"`
+	Date        string      `bson:"date" json:"date"`
+	Description string      `bson:"description,omitempty" json:"description,omitempty"`
 }

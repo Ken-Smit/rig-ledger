@@ -8,13 +8,24 @@ import {
   type ReactNode,
 } from 'react'
 import client, { onAuthFailure } from '../api/client'
-import { login as loginRequest, logout as logoutRequest } from '../api/auth'
-import type { AuthStatus, AuthUser } from '../types/user'
+import {
+  login as loginRequest,
+  logout as logoutRequest,
+  registerDriver as registerDriverRequest,
+  type RegisterDriverPayload,
+} from '../api/auth'
+import {
+  ROLE_DRIVER,
+  ROLE_OWNER,
+  type AuthStatus,
+  type AuthUser,
+} from '../types/user'
 
 interface AuthContextValue {
   status: AuthStatus
   user: AuthUser | null
   login: (email: string, password: string) => Promise<void>
+  loginAsDriver: (payload: RegisterDriverPayload) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -25,11 +36,17 @@ interface AuthProviderProps {
 }
 
 // fetchProfile pulls the projected user record from the server. Returns null
-// on 401 so the caller can transition to 'anon' without throwing.
+// on 401 OR on a malformed payload (unknown role). The role allowlist is a
+// defense-in-depth check: a typo or future-role server response should
+// degrade to anon rather than crash a route component reading user.role.
 async function fetchProfile(): Promise<AuthUser | null> {
   try {
     const res = await client.get<AuthUser>('/api/v1/user/profile')
-    return res.data
+    const data = res.data
+    if (data.role !== ROLE_OWNER && data.role !== ROLE_DRIVER) {
+      return null
+    }
+    return data
   } catch {
     return null
   }
@@ -103,12 +120,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     [applyAuthed, applyAnon],
   )
 
+  // loginAsDriver mirrors login but uses the invite-consumption endpoint.
+  // The server returns logged_in: true with the same httpOnly cookie set,
+  // so the post-call profile fetch + applyAuthed path is identical.
+  const loginAsDriver = useCallback(
+    async (payload: RegisterDriverPayload) => {
+      await registerDriverRequest(payload)
+      const profile = await fetchProfile()
+      if (profile) applyAuthed(profile)
+      else applyAnon()
+    },
+    [applyAuthed, applyAnon],
+  )
+
   const logout = useCallback(async () => {
     await logoutRequest()
     applyAnon()
   }, [applyAnon])
 
-  const value: AuthContextValue = { status, user, login, logout }
+  const value: AuthContextValue = {
+    status,
+    user,
+    login,
+    loginAsDriver,
+    logout,
+  }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

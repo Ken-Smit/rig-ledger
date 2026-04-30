@@ -1,18 +1,36 @@
 import { NavLink } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
+import { useAuth } from '../auth/AuthProvider'
+import { ROLE_DRIVER, type Role } from '../types/user'
 
 interface Props {
   onLogout: () => void
 }
 
-const TABS = [
+interface Tab {
+  to: string
+  label: string
+}
+
+const OWNER_TABS: Tab[] = [
   { to: '/',         label: 'Dashboard' },
   { to: '/fleet',    label: 'Fleet'     },
   { to: '/expenses', label: 'P&L'       },
+  { to: '/invites',  label: 'Team'      },
 ]
+
+const DRIVER_TABS: Tab[] = [
+  { to: '/',      label: 'Dashboard' },
+  { to: '/fleet', label: 'Fleet'     },
+]
+
+const tabsForRole = (role: Role | undefined): Tab[] =>
+  role === ROLE_DRIVER ? DRIVER_TABS : OWNER_TABS
 
 export default function Navbar({ onLogout }: Props) {
   const { theme, toggle } = useTheme()
+  const { user } = useAuth()
+  const tabs = tabsForRole(user?.role)
 
   return (
     <nav className="navbar">
@@ -30,7 +48,7 @@ export default function Navbar({ onLogout }: Props) {
 
       <div className="nav-right">
         <div className="nav-tabs">
-          {TABS.map(tab => (
+          {tabs.map(tab => (
             <NavLink
               key={tab.to}
               to={tab.to}

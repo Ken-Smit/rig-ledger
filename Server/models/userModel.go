@@ -6,6 +6,18 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// Role constants — the ONLY two roles in Rig Ledger.
+//
+// SECURITY: These are the canonical strings used by the JWT "role" claim, the
+// User.Role bson field, and the RequireOwner middleware. Adding a new role is a
+// security decision that must be coordinated across token issuance, the role
+// middleware allowlist, and the migration backfill — do not introduce one
+// casually.
+const (
+	RoleOwner  = "owner"
+	RoleDriver = "driver"
+)
+
 // User is the persisted shape of a Rig Ledger account.
 //
 // SECURITY: Password and RefreshToken are tagged json:"-" so they can never
@@ -13,6 +25,12 @@ import (
 // passes a *User to c.JSON. Inbound JSON for registration must use
 // RegisterRequest, which is the only DTO permitted to accept a plaintext
 // password from the wire.
+//
+// Role / FleetID: every authenticated user has a Role ("owner" | "driver") and
+// a FleetID (hex ObjectID of their Fleet). The Role drives authorization
+// (owners manage trucks/expenses/invites; drivers see only their assigned
+// fleet's read surface and log mileage). FleetID scopes every query — a user
+// can never read or mutate a document outside their own fleet.
 type User struct {
 	ID           bson.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
 	UserID       string        `bson:"user_id" json:"user_id"`
@@ -20,6 +38,8 @@ type User struct {
 	LastName     string        `bson:"last_name" json:"last_name" validate:"required,min=2,max=100"`
 	Email        string        `bson:"email" json:"email" validate:"required,email"`
 	Password     string        `bson:"password" json:"-" validate:"required,min=12"`
+	Role         string        `bson:"role" json:"role" validate:"required,oneof=owner driver"`
+	FleetID      string        `bson:"fleet_id,omitempty" json:"fleet_id,omitempty"`
 	CreatedAt    time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time     `bson:"updated_at" json:"updated_at"`
 	RefreshToken string        `bson:"refresh_token" json:"-"`
@@ -51,11 +71,16 @@ type UserLogin struct {
 // UserResponse is the projection returned to authenticated clients reading
 // their own profile. It intentionally omits the bcrypt hash, refresh token,
 // timestamps, and the internal Mongo _id.
+//
+// Role and FleetID are surfaced so the SPA can branch its navigation/UI by
+// role and pin requests to the correct fleet without a second round-trip.
 type UserResponse struct {
 	UserID    string `json:"user_id"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
+	Role      string `json:"role"`
+	FleetID   string `json:"fleet_id"`
 }
 
 // UserProfileUpdate is the request DTO for PATCH /user/profile.

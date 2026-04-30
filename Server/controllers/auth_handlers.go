@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -51,6 +53,23 @@ func VerifyPassword(hashedPassword, plaintextPassword string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(plaintextPassword)) == nil
 }
 
+// DriverRegisterRequest is the local DTO for POST /auth/register-driver.
+//
+// Declared as a controller-local type (rather than in the models package) so
+// the auth layer owns this surface end-to-end and the request shape is colocated
+// with the only handler that consumes it. Validation tags mirror RegisterRequest
+// (CLAUDE.md min=12 password policy) and add the invite token field.
+//
+// SECURITY: like RegisterRequest, this DTO deliberately omits role, fleet_id,
+// _id, refresh_token, and timestamps — those are server-managed.
+type DriverRegisterRequest struct {
+	Token     string `json:"token"      validate:"required"`
+	FirstName string `json:"first_name" validate:"required,min=2,max=100"`
+	LastName  string `json:"last_name"  validate:"required,min=2,max=100"`
+	Email     string `json:"email"      validate:"required,email"`
+	Password  string `json:"password"   validate:"required,min=12"`
+}
+
 // registrationFieldLabels maps RegisterRequest struct field names to the
 // human-readable labels surfaced to the client. Keep keys in sync with
 // models.RegisterRequest.
@@ -59,6 +78,7 @@ var registrationFieldLabels = map[string]string{
 	"LastName":  "Last name",
 	"Email":     "Email",
 	"Password":  "Password",
+	"Token":     "Invite token",
 }
 
 // registrationErrorMessage translates a validator error into plain-English copy
@@ -96,11 +116,48 @@ func registrationErrorMessage(err error) string {
 	return strings.Join(msgs, ". ")
 }
 
-// Register creates a new user from a strictly-scoped RegisterRequest DTO.
+// emailExists reports whether a user document with the given email already
+// exists. Returns (true, nil) on hit, (false, nil) on miss, (false, err) on
+// any other Mongo failure. Centralized so Register and RegisterDriver share
+// one code path for the duplicate-email check.
+func emailExists(ctx context.Context, col *mongo.Collection, email string) (bool, error) {
+	var existing models.User
+	err := col.FindOne(ctx, bson.M{"email": email}).Decode(&existing)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	return false, err
+}
+
+// hashInviteToken derives the storage form of an invite token (sha256, hex).
+// The raw token is shown to the inviter exactly once; the database only ever
+// holds the hash, so a database read cannot yield a usable invite credential.
+// Same primitive is used by CreateInvite, RegisterDriver, and LookupInvite —
+// see invite_handlers.go for the inverse generation path.
+func hashInviteToken(rawToken string) string {
+	sum := sha256.Sum256([]byte(rawToken))
+	return hex.EncodeToString(sum[:])
+}
+
+// Register creates a new owner account and provisions the owner's first fleet.
 //
 // SECURITY: binds RegisterRequest (NOT models.User) so a registrant cannot
-// inject _id, user_id, refresh_token, created_at, or updated_at. Server-managed
-// fields are populated explicitly below.
+// inject _id, user_id, refresh_token, role, fleet_id, created_at, or updated_at.
+// Server-managed fields are populated explicitly below.
+//
+// Provisioning is a multi-step transactional sequence:
+//  1. Insert the user document (no role / fleet_id yet).
+//  2. Insert a Fleet doc with owner_id = new user._id.
+//  3. Update the user with role=owner + fleet_id=<new fleet>.
+//
+// If step 2 or step 3 fails, step 1 is rolled back (user deleted). Every
+// downstream controller assumes that role != "" implies fleet_id != ""; an
+// owner without a fleet would break every protected route. We choose rollback
+// over leave-and-retry because there is no idempotent way to resume a partial
+// registration without exposing more state to the client.
 func Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -116,16 +173,14 @@ func Register(c *gin.Context) {
 	defer cancel()
 	userCollection := database.GetUserCollection()
 
-	// Check for duplicate email.
-	var existing models.User
-	err := userCollection.FindOne(ctx, bson.M{"email": req.Email}).Decode(&existing)
-	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
-		return
-	}
-	if err != mongo.ErrNoDocuments {
+	exists, err := emailExists(ctx, userCollection, req.Email)
+	if err != nil {
 		log.Printf("Register: dup-check failed email=%s: %v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
 		return
 	}
 
@@ -155,12 +210,69 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	if err := bootstrapOwnerFleet(ctx, userCollection, user); err != nil {
+		// Best-effort rollback of the user insert. If the delete itself fails
+		// we have an orphan user with no role/fleet — log loudly so ops can
+		// reconcile manually. Every protected handler defends against an empty
+		// fleet_id with a 401, so the orphan cannot be used to access data.
+		if _, delErr := userCollection.DeleteOne(ctx, bson.M{"_id": user.ID}); delErr != nil {
+			log.Printf("Register: rollback failed user=%s: %v (after fleet bootstrap err: %v)", user.ID.Hex(), delErr, err)
+		} else {
+			log.Printf("Register: rolled back user=%s after fleet bootstrap err: %v", user.ID.Hex(), err)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
+}
+
+// bootstrapOwnerFleet creates the first fleet for a freshly-inserted owner and
+// updates the user's role/fleet_id. Returns a non-nil error if either step
+// fails so the caller can perform compensating cleanup (delete the user doc).
+//
+// The owner's user._id.Hex() is the fleet's owner_id (string match for the
+// ownership filter on every owner-only handler). Fleet name defaults to
+// "<FirstName>'s Fleet" — owners can rename later via a future settings flow.
+func bootstrapOwnerFleet(ctx context.Context, userCollection *mongo.Collection, user models.User) error {
+	now := time.Now()
+	fleet := models.Fleet{
+		ID:        bson.NewObjectID(),
+		OwnerID:   user.ID.Hex(),
+		Name:      user.FirstName + "'s Fleet",
+		CreatedAt: now,
+	}
+
+	fleetCol := database.GetFleetCollection()
+	if _, err := fleetCol.InsertOne(ctx, fleet); err != nil {
+		return fmt.Errorf("insert fleet: %w", err)
+	}
+
+	_, err := userCollection.UpdateOne(ctx,
+		bson.M{"_id": user.ID},
+		bson.M{"$set": bson.M{
+			"role":       models.RoleOwner,
+			"fleet_id":   fleet.ID.Hex(),
+			"updated_at": now,
+		}},
+	)
+	if err != nil {
+		// We could attempt to delete the orphan fleet here, but the caller is
+		// already going to roll back the user; an orphan fleet (no users
+		// pointing to it) is harmless and discoverable via owner_id audit.
+		return fmt.Errorf("set role/fleet: %w", err)
+	}
+	return nil
 }
 
 // Login authenticates a user and issues access + refresh tokens via httpOnly
 // cookies. Refresh-token persistence failures are logged but do not fail the
 // login — see persistRefreshToken for the rationale.
+//
+// SECURITY: a user with an empty Role is treated as an internal data-integrity
+// failure (Register always sets role on a fresh account, and the migration in
+// Track 1 backfills legacy rows). We refuse to mint a token without a known
+// role rather than fall back to a privileged default.
 func Login(c *gin.Context) {
 	var loginDetails models.UserLogin
 	if err := c.ShouldBindJSON(&loginDetails); err != nil {
@@ -191,15 +303,27 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 3. Generate access token (15 min) and refresh token (24 hours).
-	accessToken, err := utils.GenerateAccessToken(foundUser.ID.Hex())
+	// 3. Defense-in-depth: refuse to issue a token for a user with no role.
+	// This should never happen post-migration; if it does, the access token
+	// would have role="" and every owner-only middleware check would fail
+	// silently with a confusing 403. Fail loud, fail server-side.
+	if foundUser.Role == "" {
+		log.Printf("Login: user has empty role user=%s — migration miss?", foundUser.ID.Hex())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Account is not fully provisioned"})
+		return
+	}
+
+	// 4. Generate access token (15 min) and refresh token (24 hours).
+	accessToken, err := utils.GenerateAccessToken(foundUser.ID.Hex(), foundUser.Role, foundUser.FleetID)
 	if err != nil {
+		log.Printf("Login: access token generation failed user=%s: %v", foundUser.ID.Hex(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
 	}
 
 	refreshToken, err := utils.GenerateRefreshToken(foundUser.ID.Hex())
 	if err != nil {
+		log.Printf("Login: refresh token generation failed user=%s: %v", foundUser.ID.Hex(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
 		return
 	}
@@ -210,6 +334,136 @@ func Login(c *gin.Context) {
 	// Set httpOnly cookies — these are the ONLY transport for tokens.
 	// Tokens are intentionally NOT returned in the JSON body to keep them
 	// unreachable from any JavaScript context (XSS hardening).
+	utils.SetAccessTokenCookie(c, accessToken)
+	utils.SetRefreshTokenCookie(c, refreshToken)
+
+	c.JSON(http.StatusOK, gin.H{"logged_in": true})
+}
+
+// RegisterDriver creates a driver account from a single-use invite token.
+//
+// SECURITY:
+//   - The raw token is hashed (sha256-hex) before any DB lookup; the invite
+//     collection only stores the hash, so a leaked DB dump cannot be replayed.
+//   - "not found", "expired", and "already consumed" all collapse into a single
+//     400 with identical copy — no enumeration oracle for valid invite tokens.
+//   - The invite's fleet_id is the only source of truth for the driver's fleet
+//     binding. The body deliberately does NOT carry fleet_id / role.
+//   - Email collision against existing users is checked the same way as
+//     Register so two accounts cannot share an email.
+//   - On any post-insert failure, the user document is rolled back to avoid
+//     leaving a passwordless / unconsumed-invite-pinned ghost.
+func RegisterDriver(c *gin.Context) {
+	var req DriverRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, err, "Please check your registration details and try again")
+		return
+	}
+	if err := userValidator.Struct(req); err != nil {
+		badRequest(c, err, registrationErrorMessage(err))
+		return
+	}
+
+	ctx, cancel := dbCtx(c)
+	defer cancel()
+
+	// 1. Look up the invite by token hash.
+	inviteCol := database.GetInviteCollection()
+	var invite models.Invite
+	err := inviteCol.FindOne(ctx, bson.M{"token_hash": hashInviteToken(req.Token)}).Decode(&invite)
+	if err != nil {
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			log.Printf("RegisterDriver: invite lookup failed: %v", err)
+		}
+		// Generic copy for missing/expired/consumed — see SECURITY note.
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invite is invalid or has expired"})
+		return
+	}
+	if invite.ConsumedAt != nil || time.Now().After(invite.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invite is invalid or has expired"})
+		return
+	}
+
+	// 2. Email collision check (same as owner Register).
+	userCollection := database.GetUserCollection()
+	exists, err := emailExists(ctx, userCollection, req.Email)
+	if err != nil {
+		log.Printf("RegisterDriver: dup-check failed email=%s: %v", req.Email, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
+		return
+	}
+
+	// 3. Hash password.
+	hashedPassword, err := HashPassword(req.Password)
+	if err != nil {
+		log.Printf("RegisterDriver: bcrypt failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+
+	now := time.Now()
+	user := models.User{
+		ID:        bson.NewObjectID(),
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Email:     req.Email,
+		Password:  hashedPassword,
+		Role:      models.RoleDriver,
+		FleetID:   invite.FleetID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if _, err := userCollection.InsertOne(ctx, user); err != nil {
+		log.Printf("RegisterDriver: insert failed email=%s: %v", req.Email, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+
+	// 4. Mark invite consumed. If this fails, the user is rolled back: an
+	// unconsumed invite is fine, but a consumed-twice invite would let two
+	// drivers join from one token. Choose rollback over double-spend.
+	consumedAt := now
+	upd, err := inviteCol.UpdateOne(ctx,
+		bson.M{"_id": invite.ID, "consumed_at": nil},
+		bson.M{"$set": bson.M{"consumed_at": consumedAt}},
+	)
+	if err != nil || upd.ModifiedCount == 0 {
+		if _, delErr := userCollection.DeleteOne(ctx, bson.M{"_id": user.ID}); delErr != nil {
+			log.Printf("RegisterDriver: rollback failed user=%s: %v (after invite consume err: %v)", user.ID.Hex(), delErr, err)
+		} else {
+			log.Printf("RegisterDriver: rolled back user=%s after invite consume failure: %v", user.ID.Hex(), err)
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invite is invalid or has expired"})
+		return
+	}
+
+	// 5. Issue tokens. Token-generation failure post-insert is also a rollback
+	// trigger — we do not want a half-onboarded driver who cannot log in.
+	accessToken, err := utils.GenerateAccessToken(user.ID.Hex(), user.Role, user.FleetID)
+	if err != nil {
+		log.Printf("RegisterDriver: access token generation failed user=%s: %v", user.ID.Hex(), err)
+		if _, delErr := userCollection.DeleteOne(ctx, bson.M{"_id": user.ID}); delErr != nil {
+			log.Printf("RegisterDriver: rollback failed user=%s: %v", user.ID.Hex(), delErr)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+	refreshToken, err := utils.GenerateRefreshToken(user.ID.Hex())
+	if err != nil {
+		log.Printf("RegisterDriver: refresh token generation failed user=%s: %v", user.ID.Hex(), err)
+		if _, delErr := userCollection.DeleteOne(ctx, bson.M{"_id": user.ID}); delErr != nil {
+			log.Printf("RegisterDriver: rollback failed user=%s: %v", user.ID.Hex(), delErr)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+
+	persistRefreshToken(ctx, userCollection, user.ID, refreshToken)
 	utils.SetAccessTokenCookie(c, accessToken)
 	utils.SetRefreshTokenCookie(c, refreshToken)
 
@@ -238,6 +492,9 @@ func persistRefreshToken(ctx context.Context, col *mongo.Collection, id bson.Obj
 // token in the database, and re-issues both tokens as new httpOnly cookies.
 // Refresh-token persistence failures during rotation are logged but do not
 // fail the request — see persistRefreshToken.
+//
+// The new access token carries the user's CURRENT role/fleet — important if
+// an owner re-provisions or migrates fleets between accesses.
 func RefreshAccessToken(c *gin.Context) {
 	// Refresh token is read EXCLUSIVELY from the httpOnly cookie.
 	// We deliberately do not accept it from the JSON body so that browser
@@ -279,9 +536,16 @@ func RefreshAccessToken(c *gin.Context) {
 		return
 	}
 
-	// Generate new access token.
-	newAccessToken, err := utils.GenerateAccessToken(userID)
+	if user.Role == "" {
+		log.Printf("RefreshAccessToken: user has empty role user=%s — migration miss?", userID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Account is not fully provisioned"})
+		return
+	}
+
+	// Generate new access token with the user's current role/fleet.
+	newAccessToken, err := utils.GenerateAccessToken(userID, user.Role, user.FleetID)
 	if err != nil {
+		log.Printf("RefreshAccessToken: access token generation failed user=%s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
 	}
@@ -289,6 +553,7 @@ func RefreshAccessToken(c *gin.Context) {
 	// Rotate refresh token.
 	newRefreshToken, err := utils.GenerateRefreshToken(userID)
 	if err != nil {
+		log.Printf("RefreshAccessToken: refresh token generation failed user=%s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
 		return
 	}

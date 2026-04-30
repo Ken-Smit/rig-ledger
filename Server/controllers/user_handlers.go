@@ -16,13 +16,19 @@ import (
 )
 
 // userProfileProjection is a narrow read shape for GetUserProfile.
-// We project to these four fields server-side so the bcrypt hash and refresh
+// We project to these fields server-side so the bcrypt hash and refresh
 // token never traverse the wire from MongoDB into application memory.
+//
+// Role + FleetID are included so the frontend can render role-aware UI
+// without a second round-trip. They are non-secret to the owning session
+// (the same values already ride in the access token).
 type userProfileProjection struct {
 	UserID    string `bson:"user_id"`
 	FirstName string `bson:"first_name"`
 	LastName  string `bson:"last_name"`
 	Email     string `bson:"email"`
+	Role      string `bson:"role"`
+	FleetID   string `bson:"fleet_id"`
 }
 
 // GetUserProfile returns the authenticated user's profile fields.
@@ -53,6 +59,8 @@ func GetUserProfile(c *gin.Context) {
 		"first_name": 1,
 		"last_name":  1,
 		"email":      1,
+		"role":       1,
+		"fleet_id":   1,
 	})
 
 	var profile userProfileProjection
@@ -67,6 +75,8 @@ func GetUserProfile(c *gin.Context) {
 		FirstName: profile.FirstName,
 		LastName:  profile.LastName,
 		Email:     profile.Email,
+		Role:      profile.Role,
+		FleetID:   profile.FleetID,
 	})
 }
 

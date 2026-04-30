@@ -18,6 +18,17 @@ export interface RegisterResponse {
   message: string
 }
 
+// RegisterDriverPayload is the shape POSTed to /auth/register-driver. The
+// `token` is the raw invite token (not its hash) — the server hashes and
+// matches it against the invite collection.
+export interface RegisterDriverPayload {
+  token: string
+  first_name: string
+  last_name: string
+  email: string
+  password: string
+}
+
 export const login = async (
   email: string,
   password: string,
@@ -33,6 +44,19 @@ export const register = async (
   data: RegisterPayload,
 ): Promise<RegisterResponse> => {
   const res = await client.post<RegisterResponse>('/api/v1/auth/register', data)
+  return res.data
+}
+
+// registerDriver consumes a one-time invite token, creates the driver user,
+// and returns logged_in: true with fresh httpOnly auth cookies set. The
+// caller should follow up with a profile fetch to populate AuthProvider.
+export const registerDriver = async (
+  data: RegisterDriverPayload,
+): Promise<LoginResponse> => {
+  const res = await client.post<LoginResponse>(
+    '/api/v1/auth/register-driver',
+    data,
+  )
   return res.data
 }
 
