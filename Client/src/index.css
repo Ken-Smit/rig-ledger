@@ -879,6 +879,13 @@ button {
 .field-input[type="date"] { color-scheme: dark; }
 [data-theme="light"] .field-input[type="date"] { color-scheme: light; }
 
+.field-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  display: block;
+}
+
 .login-error {
   background: rgba(255, 23, 68, 0.08);
   border: 1px solid rgba(255, 23, 68, 0.35);

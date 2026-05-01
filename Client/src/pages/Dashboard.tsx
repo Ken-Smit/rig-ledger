@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTrucks } from '../api/trucks'
 import { getExpenses } from '../api/expenses'
-import { logout } from '../api/auth'
 import type { Truck } from '../types/truck'
 import type { Expense } from '../types/expense'
 import Navbar from '../components/Navbar'
+import { useAuth } from '../auth/AuthProvider'
 
 // ── Maintenance rules ──────────────────────────────────────────────────────
 interface MaintenanceRule {
@@ -68,9 +68,9 @@ function fmt(d: string) {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  fuel:        'FUEL',
-  maintenance: 'MAINTENANCE',
-  income:      'INCOME',
+  fuel:        'Fuel',
+  maintenance: 'Maintenance',
+  income:      'Income',
 }
 
 const TYPE_CLASS: Record<string, string> = {
@@ -81,25 +81,25 @@ const TYPE_CLASS: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { logout } = useAuth()
   const [trucks, setTrucks]         = useState<Truck[]>([])
   const [expenses, setExpenses]     = useState<Expense[]>([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState('')
   const [alertsOpen, setAlertsOpen] = useState(true)
 
-  const handleLogout = async () => { await logout(); localStorage.removeItem('logged_in'); navigate('/login') }
+  const handleLogout = async () => { await logout(); navigate('/login') }
 
   useEffect(() => {
-    if (!localStorage.getItem('logged_in')) { navigate('/login'); return }
     Promise.all([getTrucks(), getExpenses()])
       .then(([t, e]) => { setTrucks(t); setExpenses(e) })
       .catch((err: unknown) => {
         const status = (err as { response?: { status?: number } })?.response?.status
-        if (status === 401) { setError('SESSION EXPIRED – PLEASE LOG IN AGAIN') }
-        else setError('FAILED TO LOAD DATA')
+        if (status === 401) { setError('Session Expired — Please Log In Again') }
+        else setError('Failed to Load Data')
       })
       .finally(() => setLoading(false))
-  }, [navigate])
+  }, [])
 
   // Monthly expense slice
   const monthly = useMemo(() => expenses.filter(e => isThisMonth(e.date)), [expenses])
@@ -166,8 +166,8 @@ export default function Dashboard() {
         {/* Header */}
         <div className="fleet-header">
           <div>
-            <h2 className="section-title">DASHBOARD</h2>
-            <p className="section-sub">{now} — fleet overview</p>
+            <h2 className="section-title">Dashboard</h2>
+            <p className="section-sub">{now} — Fleet Overview</p>
           </div>
         </div>
 
@@ -176,42 +176,42 @@ export default function Dashboard() {
         {loading ? (
           <div className="loading-state">
             <div className="loading-spinner" />
-            <p>LOADING DASHBOARD...</p>
+            <p>Loading...</p>
           </div>
         ) : (
           <>
             {/* Stats row */}
             <div className="stats-row db-stats-row">
               <div className="stat-card">
-                <div className="stat-label">TOTAL FLEET</div>
+                <div className="stat-label">Total Fleet</div>
                 <div className="stat-value">{String(trucks.length).padStart(2, '0')}</div>
-                <div className="stat-sub">REGISTERED UNITS</div>
+                <div className="stat-sub">Registered Units</div>
               </div>
 
               <div
                 className={`stat-card stat-card-clickable ${truckAlerts.length > 0 ? 'stat-card-warn' : ''}`}
                 onClick={() => truckAlerts.length > 0 && setAlertsOpen(o => !o)}
-                title={truckAlerts.length > 0 ? (alertsOpen ? 'Hide alerts' : 'Show alerts') : undefined}
+                title={truckAlerts.length > 0 ? (alertsOpen ? 'Hide Alerts' : 'Show Alerts') : undefined}
               >
-                <div className="stat-label">ATTENTION NEEDED</div>
+                <div className="stat-label">Attention Needed</div>
                 <div className={`stat-value ${truckAlerts.length > 0 ? 'text-amber' : 'text-green'}`}>
                   {String(truckAlerts.length).padStart(2, '0')}
                 </div>
                 <div className="stat-sub">
                   {truckAlerts.length > 0
-                    ? `${truckAlerts.length} UNIT${truckAlerts.length > 1 ? 'S' : ''} REQUIRE SERVICE`
-                    : 'ALL UNITS UP TO DATE'}
+                    ? `${truckAlerts.length} Unit${truckAlerts.length > 1 ? 's' : ''} Require Service`
+                    : 'All Units Up to Date'}
                 </div>
               </div>
 
               <div className="stat-card">
-                <div className="stat-label">MONTHLY INCOME</div>
+                <div className="stat-label">Monthly Income</div>
                 <div className="stat-value text-green">{money(monthlyIncome)}</div>
-                <div className="stat-sub">LOAD REVENUE THIS MONTH</div>
+                <div className="stat-sub">Load Revenue This Month</div>
               </div>
 
               <div className="stat-card">
-                <div className="stat-label">MONTHLY NET</div>
+                <div className="stat-label">Monthly Net</div>
                 <div className={`stat-value ${monthlyNet >= 0 ? 'text-green' : 'text-red'}`}>
                   {money(monthlyNet)}
                 </div>
@@ -222,7 +222,7 @@ export default function Dashboard() {
             {truckAlerts.length > 0 && alertsOpen && (
               <div className="db-alerts-panel">
                 <div className="db-alerts-header">
-                  <span className="db-alerts-title">⚠ SERVICE ALERTS</span>
+                  <span className="db-alerts-title">⚠ Service Alerts</span>
                   <button className="btn-ghost btn-sm" onClick={() => setAlertsOpen(false)}>✕</button>
                 </div>
                 <div className="db-alerts-list">
@@ -234,10 +234,10 @@ export default function Dashboard() {
                           <div key={s.label} className="db-alert-service">
                             <span className="db-alert-service-name">{s.label}</span>
                             <span className="db-alert-overdue text-amber">
-                              {s.daysOverdue}d overdue
+                              {s.daysOverdue}d Overdue
                             </span>
                             <span className="db-alert-due text-dim">
-                              was due {s.dueDate}
+                              Was Due {s.dueDate}
                             </span>
                           </div>
                         ))}
@@ -253,18 +253,18 @@ export default function Dashboard() {
 
               {/* Per-truck breakdown */}
               <div className="db-panel">
-                <div className="db-panel-title">PER-UNIT BREAKDOWN <span className="text-dim">— THIS MONTH</span></div>
+                <div className="db-panel-title">Per-Unit Breakdown <span className="text-dim">— This Month</span></div>
                 {truckBreakdown.length === 0 ? (
-                  <p className="text-dim" style={{ padding: '16px 0', fontSize: 12 }}>No units registered.</p>
+                  <p className="text-dim" style={{ padding: '16px 0', fontSize: 12 }}>No Units Registered.</p>
                 ) : (
                   <table className="db-table">
                     <thead>
                       <tr>
-                        <th>UNIT</th>
-                        <th className="db-col-right">FUEL</th>
-                        <th className="db-col-right">MAINT.</th>
-                        <th className="db-col-right">INCOME</th>
-                        <th className="db-col-right">NET</th>
+                        <th>Unit</th>
+                        <th className="db-col-right">Fuel</th>
+                        <th className="db-col-right">Maint.</th>
+                        <th className="db-col-right">Income</th>
+                        <th className="db-col-right">Net</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -286,9 +286,9 @@ export default function Dashboard() {
 
               {/* Recent activity */}
               <div className="db-panel">
-                <div className="db-panel-title">RECENT ACTIVITY</div>
+                <div className="db-panel-title">Recent Activity</div>
                 {recent.length === 0 ? (
-                  <p className="text-dim" style={{ padding: '16px 0', fontSize: 12 }}>No entries yet.</p>
+                  <p className="text-dim" style={{ padding: '16px 0', fontSize: 12 }}>No Entries Yet.</p>
                 ) : (
                   <div className="db-activity">
                     {recent.map(e => (

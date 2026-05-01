@@ -1,28 +1,146 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import type { ReactNode } from 'react'
 import Home from './pages/Home'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import TruckDetail from './pages/TruckDetail'
-import Fleet from './pages/Fleet'
-import Expenses from './pages/Expenses'
+import { useAuth } from './auth/AuthProvider'
+import { RoleRoute } from './components/RoleRoute'
+import { ROLE_DRIVER } from './types/user'
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const authed = localStorage.getItem('logged_in') && localStorage.getItem('access_token')
-  return authed ? <>{children}</> : <Navigate to="/home" replace />
+// Route-level pages are code-split so the initial bundle only ships what the
+// landing experience needs. Home stays eager — it is the first paint target
+// and lazy-loading it would add a network roundtrip before any pixels render.
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const DriverDashboard = lazy(() => import('./pages/DriverDashboard'))
+const Fleet = lazy(() => import('./pages/Fleet'))
+const Expenses = lazy(() => import('./pages/Expenses'))
+const TruckDetail = lazy(() => import('./pages/TruckDetail'))
+const Invites = lazy(() => import('./pages/Invites'))
+const DriverRegister = lazy(() => import('./pages/DriverRegister'))
+const Loads = lazy(() => import('./pages/Loads'))
+const MyLoads = lazy(() => import('./pages/MyLoads'))
+
+// Reuses the same spinner markup PrivateRoute uses for its auth-boot branch,
+// so users see a consistent loading state whether the wait is for AuthProvider
+// or for a route chunk to download.
+function RouteFallback() {
+  return (
+    <div className="loading-state">
+      <div className="loading-spinner" />
+    </div>
+  )
+}
+
+// PrivateRoute consumes the AuthProvider's state machine. The 'loading'
+// branch is critical: redirecting while the boot probe is still in flight
+// would punt every authenticated user back to /home on a hard refresh.
+function PrivateRoute({ children }: { children: ReactNode }) {
+  const { status } = useAuth()
+
+  if (status === 'loading') {
+    return (
+      <div className="loading-state">
+        <div className="loading-spinner" />
+      </div>
+    )
+  }
+
+  if (status === 'anon') {
+    return <Navigate to="/home" replace />
+  }
+
+  return <>{children}</>
+}
+
+// RoleDispatch picks the right "/" landing page per role. Drivers must
+// never see the financial dashboard, owners want the full P&L picture.
+// Wrapped in PrivateRoute by the caller, so user is guaranteed non-null
+// here at runtime — the defensive fallback to Dashboard exists only to
+// satisfy the compiler.
+function RoleDispatch() {
+  const { user } = useAuth()
+  if (user?.role === ROLE_DRIVER) return <DriverDashboard />
+  return <Dashboard />
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/home" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/fleet" element={<PrivateRoute><Fleet /></PrivateRoute>} />
-        <Route path="/expenses" element={<PrivateRoute><Expenses /></PrivateRoute>} />
-        <Route path="/trucks/:id" element={<PrivateRoute><TruckDetail /></PrivateRoute>} />
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/home" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/register/driver/:token"
+            element={<DriverRegister />}
+          />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <RoleDispatch />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/fleet"
+            element={
+              <PrivateRoute>
+                <Fleet />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/expenses"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="owner">
+                  <Expenses />
+                </RoleRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/trucks/:id"
+            element={
+              <PrivateRoute>
+                <TruckDetail />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/invites"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="owner">
+                  <Invites />
+                </RoleRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/loads"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="owner">
+                  <Loads />
+                </RoleRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/my-loads"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="driver">
+                  <MyLoads />
+                </RoleRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

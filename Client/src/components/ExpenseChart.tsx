@@ -33,9 +33,9 @@ interface ChartPoint {
 type ActiveLine = 'net' | 'income' | 'expenses'
 
 const LINE_CONFIG: Record<ActiveLine, { label: string; varName: string }> = {
-  net:      { label: 'NET',      varName: '--cyan' },
-  income:   { label: 'INCOME',   varName: '--cyan' },
-  expenses: { label: 'EXPENSES', varName: '--red'  },
+  net:      { label: 'Net',      varName: '--cyan' },
+  income:   { label: 'Income',   varName: '--cyan' },
+  expenses: { label: 'Expenses', varName: '--red'  },
 }
 
 // Read a CSS variable from :root so colors match the current theme
@@ -57,10 +57,10 @@ function getCssVar(name: string): string {
 }
 
 const PERIODS: { key: Period; label: string }[] = [
-  { key: 'day',   label: 'DAILY'    },
-  { key: 'week',  label: 'WEEK'     },
-  { key: 'month', label: 'MONTH'    },
-  { key: 'all',   label: 'ALL TIME' },
+  { key: 'day',   label: 'Daily'    },
+  { key: 'week',  label: 'Week'     },
+  { key: 'month', label: 'Month'    },
+  { key: 'all',   label: 'All Time' },
 ]
 
 function fmtMoney(n: number): string {
@@ -96,15 +96,15 @@ function DetailTooltip({ active, payload }: Partial<TooltipContentProps<number, 
     <div className="rh-tooltip">
       <div className="rh-tooltip-date">{fmtDate(pt.rawDate)}</div>
       <div className="rh-tooltip-row">
-        <span className="rh-tooltip-label text-cyan">INCOME</span>
+        <span className="rh-tooltip-label text-cyan">Income</span>
         <span className="rh-tooltip-value text-cyan">{fmtMoney(pt.income)}</span>
       </div>
       <div className="rh-tooltip-row">
-        <span className="rh-tooltip-label text-red">EXPENSES</span>
+        <span className="rh-tooltip-label text-red">Expenses</span>
         <span className="rh-tooltip-value text-red">{fmtMoney(pt.expenses)}</span>
       </div>
       <div className="rh-tooltip-row">
-        <span className="rh-tooltip-label">NET</span>
+        <span className="rh-tooltip-label">Net</span>
         <span className={`rh-tooltip-value ${pt.net >= 0 ? 'text-cyan' : 'text-red'}`}>
           {fmtMoney(pt.net)}
         </span>
@@ -171,7 +171,7 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
 
     return {
       value: source[activeLine],
-      date: hoverPoint ? fmtDate(hoverPoint.rawDate) : 'TOTAL',
+      date: hoverPoint ? fmtDate(hoverPoint.rawDate) : 'Total',
     }
   }, [data, hoverPoint, activeLine])
 
@@ -338,7 +338,7 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
                   strokeDasharray="2 6"
                   strokeOpacity={0.55}
                   label={hoverPoint ? {
-                    value: `AVG ${fmtCompactMoney(stats.avg)}`,
+                    value: `Avg ${fmtCompactMoney(stats.avg)}`,
                     position: 'insideTopLeft',
                     fill: displayColor,
                     fontSize: 10,
@@ -376,7 +376,7 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
                   strokeWidth={2}
                   ifOverflow="visible"
                   label={hoverPoint ? {
-                    value: `MAX ${fmtCompactMoney(stats.max[activeLine])}`,
+                    value: `Max ${fmtCompactMoney(stats.max[activeLine])}`,
                     position: 'top',
                     fill: displayColor,
                     fontSize: 10,
@@ -394,7 +394,7 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
                   strokeWidth={2}
                   ifOverflow="visible"
                   label={hoverPoint ? {
-                    value: `MIN ${fmtCompactMoney(stats.min[activeLine])}`,
+                    value: `Min ${fmtCompactMoney(stats.min[activeLine])}`,
                     position: 'bottom',
                     fill: 'var(--text-dim)',
                     fontSize: 10,
@@ -405,7 +405,7 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="rh-empty-scope" role="img" aria-label="No data — awaiting signal">
+          <div className="rh-empty-scope" role="img" aria-label="No Data — Awaiting Signal">
             <svg className="rh-empty-svg" viewBox="0 0 400 240" preserveAspectRatio="none" aria-hidden="true">
               <defs>
                 <pattern id="rh-empty-grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -424,7 +424,7 @@ export default function ExpenseChart({ expenses, period, onPeriodChange }: Props
             </svg>
             <div className="rh-empty-scan" aria-hidden="true" />
             <div className="rh-empty-blip" aria-hidden="true" />
-            <div className="rh-empty-label">AWAITING SIGNAL</div>
+            <div className="rh-empty-label">Awaiting Signal</div>
           </div>
         )}
       </div>

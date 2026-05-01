@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, register } from '../api/auth'
+import { register } from '../api/auth'
+import { useAuth } from '../auth/AuthProvider'
 import { useTheme } from '../hooks/useTheme'
 
 type Tab = 'login' | 'register'
@@ -8,6 +9,7 @@ type Tab = 'login' | 'register'
 export default function Login() {
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
+  const { login } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,7 +35,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(email, password)
-      localStorage.setItem('logged_in', 'true')
+      // Auth state is now derived from the AuthProvider, not localStorage.
       navigate('/')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -70,14 +72,14 @@ export default function Login() {
         <button
           className="btn-ghost btn-sm"
           onClick={() => navigate('/home')}
-          title="Back to home"
+          title="Back to Home"
         >
-          ⬡ HOME
+          ⬡ Home
         </button>
         <button
           className="btn-ghost btn-sm nav-theme-toggle"
           onClick={toggle}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {theme === 'dark' ? '☀' : '☾'}
         </button>
@@ -88,8 +90,8 @@ export default function Login() {
 
         <div className="login-header">
           <div className="login-logo-mark">⬡</div>
-          <h1 className="login-logo-title">RIG LEDGER</h1>
-          <p className="login-logo-sub">COMMAND SYSTEM v1.0</p>
+          <h1 className="login-logo-title">Rig Ledger</h1>
+          <p className="login-logo-sub">Fleet Management v1.0</p>
         </div>
 
         <div className="login-tabs">
@@ -97,13 +99,13 @@ export default function Login() {
             className={`login-tab ${tab === 'login' ? 'active' : ''}`}
             onClick={() => switchTab('login')}
           >
-            SIGN IN
+            Sign In
           </button>
           <button
             className={`login-tab ${tab === 'register' ? 'active' : ''}`}
             onClick={() => switchTab('register')}
           >
-            REGISTER
+            Register
           </button>
         </div>
 
@@ -136,14 +138,14 @@ export default function Login() {
             {error && <div className="login-error">{error}</div>}
 
             <button className="btn-primary login-submit" type="submit" disabled={loading}>
-              {loading ? 'AUTHENTICATING...' : 'INITIALIZE SESSION'}
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="login-form">
             <div className="login-field-row">
               <div className="field-group">
-                <label className="field-label">FIRST NAME</label>
+                <label className="field-label">First Name</label>
                 <input
                   className="field-input"
                   type="text"
@@ -154,7 +156,7 @@ export default function Login() {
                 />
               </div>
               <div className="field-group">
-                <label className="field-label">LAST NAME</label>
+                <label className="field-label">Last Name</label>
                 <input
                   className="field-input"
                   type="text"
@@ -167,7 +169,7 @@ export default function Login() {
             </div>
 
             <div className="field-group">
-              <label className="field-label">EMAIL</label>
+              <label className="field-label">Email</label>
               <input
                 className="field-input"
                 type="email"
@@ -186,14 +188,16 @@ export default function Login() {
                 value={regPassword}
                 onChange={e => setRegPassword(e.target.value)}
                 placeholder="••••••••"
+                minLength={12}
                 required
               />
+              <small className="field-hint">Must be at least 12 characters.</small>
             </div>
 
             {error && <div className="login-error">{error}</div>}
 
             <button className="btn-primary login-submit" type="submit" disabled={loading}>
-              {loading ? 'REGISTERING...' : 'CREATE OPERATOR PROFILE'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
         )}

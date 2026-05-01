@@ -28,3 +28,39 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# ===== CLAUDE / AGENT CONTEXT =====
+# CLAUDE.md carries project history, resume notes, and session-specific
+# context that should not ship to public repos or downstream users.
+CLAUDE.md
+.claude/
+.claude.local.md
+
+# ===== SECRETS — DEFENSE IN DEPTH =====
+# Catch-all for any future env variant in either tree.
+.env
+.env.*
+*.env
+!.env.example
+!.env.sample
+
+# Credential / key material
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+secrets.json
+credentials.json
+service-account*.json
+
+# Database dumps + backups
+*.dump
+*.bson
+*.bak
+*.backup
+
+# Cloud-provider local state
+.aws/
+.gcloud/

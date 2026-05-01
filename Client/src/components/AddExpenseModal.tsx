@@ -9,9 +9,9 @@ interface Props {
 }
 
 const TYPE_LABELS: Record<ExpenseType, string> = {
-  fuel:        'FUEL COST',
-  maintenance: 'MAINTENANCE COST',
-  income:      'LOAD INCOME',
+  fuel:        'Fuel Cost',
+  maintenance: 'Maintenance Cost',
+  income:      'Load Income',
 }
 
 export default function AddExpenseModal({ trucks, onSave, onClose }: Props) {
@@ -42,7 +42,7 @@ export default function AddExpenseModal({ trucks, onSave, onClose }: Props) {
       })
       onClose()
     } catch {
-      setError('FAILED TO SAVE ENTRY')
+      setError('Failed to Save Entry')
       setSaving(false)
     }
   }
@@ -54,13 +54,13 @@ export default function AddExpenseModal({ trucks, onSave, onClose }: Props) {
         <div className="modal-bracket-br" />
 
         <div className="modal-header">
-          <span className="modal-title">ADD ENTRY</span>
+          <span className="modal-title">Add Entry</span>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
         <form className="modal-form" onSubmit={handleSubmit}>
           <div className="field-group">
-            <label className="field-label">UNIT</label>
+            <label className="field-label">Unit</label>
             <select className="field-input field-select" value={form.truck_id} onChange={set('truck_id')} required>
               {trucks.map(t => (
                 <option key={t._id} value={t._id}>
@@ -72,7 +72,7 @@ export default function AddExpenseModal({ trucks, onSave, onClose }: Props) {
 
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">TYPE</label>
+              <label className="field-label">Type</label>
               <select className="field-input field-select" value={form.type} onChange={set('type')} required>
                 {(Object.keys(TYPE_LABELS) as ExpenseType[]).map(t => (
                   <option key={t} value={t}>{TYPE_LABELS[t]}</option>
@@ -80,13 +80,13 @@ export default function AddExpenseModal({ trucks, onSave, onClose }: Props) {
               </select>
             </div>
             <div className="field-group">
-              <label className="field-label">DATE</label>
+              <label className="field-label">Date</label>
               <input className="field-input" type="date" value={form.date} onChange={set('date')} required />
             </div>
           </div>
 
           <div className="field-group">
-            <label className="field-label">AMOUNT ($)</label>
+            <label className="field-label">Amount ($)</label>
             <input
               className="field-input"
               type="number"
@@ -100,16 +100,16 @@ export default function AddExpenseModal({ trucks, onSave, onClose }: Props) {
           </div>
 
           <div className="field-group">
-            <label className="field-label">DESCRIPTION</label>
+            <label className="field-label">Description</label>
             <input className="field-input" type="text" value={form.description} onChange={set('description')} placeholder="optional" />
           </div>
 
           {error && <div className="login-error">{error}</div>}
 
           <div className="modal-actions">
-            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>CANCEL</button>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'SAVING...' : 'ADD ENTRY'}
+              {saving ? 'Saving...' : 'Add Entry'}
             </button>
           </div>
         </form>

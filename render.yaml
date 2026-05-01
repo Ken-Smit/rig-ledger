@@ -33,4 +33,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://rig-ledger-api.onrender.com
+        value: https://rig-ledgerapi.onrender.com

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Truck } from '../types/truck'
 
 type Status = 'good' | 'warning' | 'critical' | 'unknown'
@@ -31,15 +32,29 @@ function fmt(d?: string) {
 
 interface Props {
   truck: Truck
-  onEdit: () => void
-  onDelete: () => void
+  // Owner mode: pass onEdit / onDelete and the default action row renders.
+  // Driver mode: pass `actions` to swap in custom action markup (e.g. a
+  // "Log Mileage" button) and omit the owner-only callbacks.
+  onEdit?: () => void
+  onDelete?: () => void
+  actions?: ReactNode
 }
 
-export default function TruckCard({ truck, onEdit, onDelete }: Props) {
+export default function TruckCard({ truck, onEdit, onDelete, actions }: Props) {
   const status = getStatus(truck)
   const unitLabel = truck.unit_number ?? `UNIT-${truck._id.slice(-4).toUpperCase()}`
 
   const openDetail = () => window.open(`/trucks/${truck._id}`, '_blank')
+
+  // The action row swap is what makes this component reusable across roles.
+  // If `actions` is provided, drivers' Log Mileage button (or any other
+  // future custom action) renders in place of the default Edit/Remove pair.
+  const defaultActions = (
+    <>
+      <button className="btn-ghost btn-sm" onClick={onEdit}>✎ Edit</button>
+      <button className="btn-danger btn-sm" onClick={onDelete}>✕ Remove</button>
+    </>
+  )
 
   return (
     <div className={`truck-card status-${status}`} onClick={openDetail} style={{ cursor: 'pointer' }}>
@@ -62,34 +77,33 @@ export default function TruckCard({ truck, onEdit, onDelete }: Props) {
 
       <div className="tc-data">
         <div className="tc-row">
-          <span className="tc-key">ANNUAL INSP</span>
+          <span className="tc-key">Annual Insp.</span>
           <span className="tc-val">{fmt(truck.annual_inspection_date)}</span>
         </div>
         <div className="tc-row">
-          <span className="tc-key">OIL CHANGE</span>
+          <span className="tc-key">Oil Change</span>
           <span className="tc-val">{fmt(truck.last_oil_change_date)}</span>
         </div>
         <div className="tc-row">
-          <span className="tc-key">BRAKE INSP</span>
+          <span className="tc-key">Brake Insp.</span>
           <span className="tc-val">{fmt(truck.brake_inspection_date)}</span>
         </div>
         {truck.last_oil_change_mileage != null && (
           <div className="tc-row">
-            <span className="tc-key">LAST OIL MI</span>
+            <span className="tc-key">Last Oil Mi</span>
             <span className="tc-val">{truck.last_oil_change_mileage.toLocaleString()} mi</span>
           </div>
         )}
         {truck.last_tire_rotation_date && (
           <div className="tc-row">
-            <span className="tc-key">TIRE ROTATE</span>
+            <span className="tc-key">Tire Rotation</span>
             <span className="tc-val">{fmt(truck.last_tire_rotation_date)}</span>
           </div>
         )}
       </div>
 
       <div className="tc-actions" onClick={e => e.stopPropagation()}>
-        <button className="btn-ghost btn-sm" onClick={onEdit}>✎ EDIT</button>
-        <button className="btn-danger btn-sm" onClick={onDelete}>✕ REMOVE</button>
+        {actions ?? defaultActions}
       </div>
     </div>
   )
