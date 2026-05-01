@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { getTrucks } from '../api/trucks'
 import { getMileageLogs } from '../api/mileage'
+import { getMyLoads, transitionLoad } from '../api/loads'
 import type { Truck } from '../types/truck'
 import type { MileageLog } from '../types/mileage'
+import type { DriverLoad } from '../types/load'
+import { LOAD_STATUS_IN_PROGRESS, LOAD_STATUS_PENDING } from '../types/load'
 import Navbar from '../components/Navbar'
+import LoadCard from '../components/LoadCard'
 import { MileageLogModal } from '../components/MileageLogModal'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -41,14 +45,24 @@ function driverTail(id: string): string {
   return id.slice(-6).toUpperCase()
 }
 
+function browserTz(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
 export default function DriverDashboard() {
   const navigate = useNavigate()
   const { logout, user } = useAuth()
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [logs, setLogs] = useState<MileageLog[]>([])
+  const [todaysLoads, setTodaysLoads] = useState<DriverLoad[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modalTruck, setModalTruck] = useState<Truck | null>(null)
+  const [transitioningId, setTransitioningId] = useState<string | null>(null)
 
   const handleLogout = async () => {
     await logout()
@@ -69,6 +83,10 @@ export default function DriverDashboard() {
       // endpoint.
       const lists = await Promise.all(t.map(tr => getMileageLogs(tr._id)))
       setLogs(lists.flat())
+      // Today's loads is its own panel — driver lands here and sees what
+      // work is on for the day before scrolling to the mileage tools.
+      const myLoads = await getMyLoads({ tz: browserTz() })
+      setTodaysLoads(myLoads)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response
         ?.status
@@ -82,6 +100,78 @@ export default function DriverDashboard() {
   useEffect(() => {
     void loadAll()
   }, [loadAll])
+
+  // handleLoadTransition advances the state machine on a single load and
+  // reconciles the local view with the server's authoritative response.
+  const handleLoadTransition = useCallback(
+    async (load: DriverLoad, next: 'in_progress' | 'complete') => {
+      const verb = next === 'in_progress' ? 'Start this load now?' : 'Mark this load complete?'
+      if (!confirm(verb)) return
+      setTransitioningId(load._id)
+      try {
+        const updated = (await transitionLoad(load._id, next)) as DriverLoad
+        setTodaysLoads(prev => prev.map(l => (l._id === load._id ? updated : l)))
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 409) {
+          setError('That load was changed elsewhere. Refreshing.')
+          void loadAll()
+        } else {
+          setError('Could not update the load. Try again.')
+        }
+      } finally {
+        setTransitioningId(null)
+      }
+    },
+    [loadAll],
+  )
+
+  const todaysActiveLoads = useMemo(() => {
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000)
+    return todaysLoads
+      .filter(l => {
+        if (l.status === LOAD_STATUS_IN_PROGRESS) return true
+        if (l.status === LOAD_STATUS_PENDING) {
+          const pickup = new Date(l.scheduled_pickup_at)
+          return pickup < endOfToday
+        }
+        return false
+      })
+      .sort((a, b) => {
+        if (a.status === LOAD_STATUS_IN_PROGRESS && b.status !== LOAD_STATUS_IN_PROGRESS) return -1
+        if (b.status === LOAD_STATUS_IN_PROGRESS && a.status !== LOAD_STATUS_IN_PROGRESS) return 1
+        return new Date(a.scheduled_pickup_at).getTime() - new Date(b.scheduled_pickup_at).getTime()
+      })
+  }, [todaysLoads])
+
+  const renderLoadActions = (l: DriverLoad) => {
+    const busy = transitioningId === l._id
+    if (l.status === LOAD_STATUS_PENDING) {
+      return (
+        <button
+          className="btn-primary btn-sm"
+          disabled={busy}
+          onClick={() => handleLoadTransition(l, 'in_progress')}
+        >
+          {busy ? 'Starting...' : 'Start Pickup'}
+        </button>
+      )
+    }
+    if (l.status === LOAD_STATUS_IN_PROGRESS) {
+      return (
+        <button
+          className="btn-primary btn-sm"
+          disabled={busy}
+          onClick={() => handleLoadTransition(l, 'complete')}
+        >
+          {busy ? 'Saving...' : 'Mark Complete'}
+        </button>
+      )
+    }
+    return null
+  }
 
   // After a save, splice the new log into local state and replace any prior
   // log on the same (truck_id, date) key — the server upserts, so the
@@ -160,6 +250,43 @@ export default function DriverDashboard() {
             </div>
           ) : (
             <>
+              <div style={{ marginBottom: 24 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: 8,
+                  }}
+                >
+                  <h3 className="section-title" style={{ fontSize: 14 }}>
+                    Today's Work{' '}
+                    <span className="text-dim" style={{ fontSize: 12 }}>
+                      ({todaysActiveLoads.length})
+                    </span>
+                  </h3>
+                  <Link to="/my-loads" className="btn-ghost btn-sm">
+                    View All
+                  </Link>
+                </div>
+                {todaysActiveLoads.length === 0 ? (
+                  <p className="text-dim" style={{ fontSize: 12 }}>
+                    No loads scheduled for today.
+                  </p>
+                ) : (
+                  <div className="truck-grid">
+                    {todaysActiveLoads.map(l => (
+                      <LoadCard
+                        key={l._id}
+                        load={l}
+                        truckLabel={truckLabel(l.truck_id ?? '')}
+                        actions={renderLoadActions(l)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="stats-row db-stats-row">
                 <div className="stat-card">
                   <div className="stat-label">Total Fleet</div>

@@ -81,7 +81,10 @@ func ensureIndexes(ctx context.Context) error {
 	if err := ensureInviteIndexes(ctx); err != nil {
 		return err
 	}
-	return ensureMileageLogIndexes(ctx)
+	if err := ensureMileageLogIndexes(ctx); err != nil {
+		return err
+	}
+	return ensureLoadIndexes(ctx)
 }
 
 // ensureUserIndexes creates the unique email index. Server-side uniqueness is
@@ -180,6 +183,49 @@ func ensureInviteIndexes(ctx context.Context) error {
 	return createIndexes(ctx, GetInviteCollection(), models)
 }
 
+// ensureLoadIndexes creates the indexes that back every Load query path:
+//   - (fleet_id, created_at desc):           owner overview, newest-first.
+//   - (driver_id, status, scheduled_pickup): driver "today / queue" — the hot
+//     read path on every driver phone fetch. Composite includes status so the
+//     "in progress" + "pending today" sections can be served from one index.
+//   - (fleet_id, status, created_at desc):   owner status-filtered listings.
+//   - (truck_id, created_at desc):           optional per-truck history.
+//
+// scheduled_pickup_at is denormalized into the load document at write time
+// from stops[0] (the earliest sequence stop, always a pickup per the
+// validator). Indexing through stops.scheduled_at would create a multikey
+// index across an array — correct but harder to reason about and slower
+// than indexing a denormalized scalar.
+func ensureLoadIndexes(ctx context.Context) error {
+	models := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "fleet_id", Value: 1}, {Key: "created_at", Value: -1}},
+			Options: options.Index().SetName("fleet_id_created_at_desc"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "driver_id", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "scheduled_pickup_at", Value: 1},
+			},
+			Options: options.Index().SetName("driver_status_pickup"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "fleet_id", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "created_at", Value: -1},
+			},
+			Options: options.Index().SetName("fleet_status_created_desc"),
+		},
+		{
+			Keys:    bson.D{{Key: "truck_id", Value: 1}, {Key: "created_at", Value: -1}},
+			Options: options.Index().SetName("truck_id_created_at_desc"),
+		},
+	}
+	return createIndexes(ctx, GetLoadCollection(), models)
+}
+
 // ensureMileageLogIndexes creates:
 //   - unique (fleet_id, truck_id, date): natural key for upserts. Prevents
 //     two writers from inserting parallel rows for the same truck/day.
@@ -248,6 +294,11 @@ func GetInviteCollection() *mongo.Collection {
 // GetMileageLogCollection returns the mileage_logs collection.
 func GetMileageLogCollection() *mongo.Collection {
 	return client.Database("rigledger").Collection("mileage_logs")
+}
+
+// GetLoadCollection returns the loads collection.
+func GetLoadCollection() *mongo.Collection {
+	return client.Database("rigledger").Collection("loads")
 }
 
 // Disconnect closes the MongoDB connection.

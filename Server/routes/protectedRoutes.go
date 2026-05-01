@@ -43,6 +43,15 @@ func SetupProtectedRoutes(router *gin.Engine) {
 		protected.GET("/mileage-logs", controllers.GetMileageLogs)
 		protected.POST("/mileage-logs", controllers.UpsertMileageLog)
 
+		// Loads — driver tier. Literal /loads/mine paths registered before
+		// /loads/:id (in the owner group) so the radix tree resolves the literal
+		// path without colliding with the param route. TransitionLoad lives here
+		// (not owner-only) because both drivers and owners legitimately call it;
+		// the handler enforces driver_id == userID for non-owner callers.
+		protected.GET("/loads/mine", controllers.ListMyLoads)
+		protected.GET("/loads/mine/:id", controllers.GetMyLoad)
+		protected.POST("/loads/:id/transition", controllers.TransitionLoad)
+
 		// Owner-only.
 		ownerOnly := protected.Group("")
 		ownerOnly.Use(middleware.RequireOwner())
@@ -58,6 +67,17 @@ func SetupProtectedRoutes(router *gin.Engine) {
 			ownerOnly.POST("/invites", controllers.CreateInvite)
 			ownerOnly.GET("/invites", controllers.GetInvites)
 			ownerOnly.DELETE("/invites/:id", controllers.DeleteInvite)
+
+			// Loads — owner tier. Drivers must not list fleet-wide loads or
+			// see other drivers' assignments; the driver surface is /loads/mine
+			// in the authenticated tier above.
+			ownerOnly.POST("/loads", controllers.CreateLoad)
+			ownerOnly.GET("/loads", controllers.ListLoads)
+			ownerOnly.GET("/loads/:id", controllers.GetLoad)
+			ownerOnly.PUT("/loads/:id", controllers.UpdateLoad)
+			ownerOnly.DELETE("/loads/:id", controllers.DeleteLoad)
+
+			ownerOnly.GET("/fleet/drivers", controllers.ListFleetDrivers)
 		}
 	}
 }

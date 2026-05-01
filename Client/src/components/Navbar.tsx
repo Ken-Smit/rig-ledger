@@ -15,13 +15,15 @@ interface Tab {
 const OWNER_TABS: Tab[] = [
   { to: '/',         label: 'Dashboard' },
   { to: '/fleet',    label: 'Fleet'     },
+  { to: '/loads',    label: 'Loads'     },
   { to: '/expenses', label: 'P&L'       },
   { to: '/invites',  label: 'Team'      },
 ]
 
 const DRIVER_TABS: Tab[] = [
-  { to: '/',      label: 'Dashboard' },
-  { to: '/fleet', label: 'Fleet'     },
+  { to: '/',         label: 'Dashboard' },
+  { to: '/my-loads', label: 'My Loads'  },
+  { to: '/fleet',    label: 'Fleet'     },
 ]
 
 const tabsForRole = (role: Role | undefined): Tab[] =>

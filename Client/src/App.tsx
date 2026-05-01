@@ -17,6 +17,8 @@ const Expenses = lazy(() => import('./pages/Expenses'))
 const TruckDetail = lazy(() => import('./pages/TruckDetail'))
 const Invites = lazy(() => import('./pages/Invites'))
 const DriverRegister = lazy(() => import('./pages/DriverRegister'))
+const Loads = lazy(() => import('./pages/Loads'))
+const MyLoads = lazy(() => import('./pages/MyLoads'))
 
 // Reuses the same spinner markup PrivateRoute uses for its auth-boot branch,
 // so users see a consistent loading state whether the wait is for AuthProvider
@@ -112,6 +114,26 @@ export default function App() {
               <PrivateRoute>
                 <RoleRoute role="owner">
                   <Invites />
+                </RoleRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/loads"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="owner">
+                  <Loads />
+                </RoleRoute>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/my-loads"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="driver">
+                  <MyLoads />
                 </RoleRoute>
               </PrivateRoute>
             }
