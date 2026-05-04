@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Truck } from '../types/truck'
 
 type Status = 'good' | 'warning' | 'critical' | 'unknown'
@@ -32,27 +33,40 @@ function fmt(d?: string) {
 
 interface Props {
   truck: Truck
-  // Owner mode: pass onEdit / onDelete and the default action row renders.
-  // Driver mode: pass `actions` to swap in custom action markup (e.g. a
-  // "Log Mileage" button) and omit the owner-only callbacks.
+  // Per-action callbacks compose the default action row. Each button only
+  // renders when its handler is provided, so the same component serves
+  // owners (edit + remove + optional log mileage), drivers (log mileage
+  // only), and any future role mix without prop juggling.
   onEdit?: () => void
   onDelete?: () => void
+  onLogMileage?: () => void
+  // Escape hatch: if a caller needs a totally custom action row, pass
+  // `actions` and it replaces the composed default.
   actions?: ReactNode
 }
 
-export default function TruckCard({ truck, onEdit, onDelete, actions }: Props) {
+export default function TruckCard({ truck, onEdit, onDelete, onLogMileage, actions }: Props) {
+  const navigate = useNavigate()
   const status = getStatus(truck)
   const unitLabel = truck.unit_number ?? `UNIT-${truck._id.slice(-4).toUpperCase()}`
 
-  const openDetail = () => window.open(`/trucks/${truck._id}`, '_blank')
+  // In-place SPA nav. Avoids re-mounting AuthProvider in a new tab, which
+  // would re-run the boot probe (refresh + profile) and stall on cross-origin
+  // cookies in dev. Live auth state carries over, so the detail page renders
+  // immediately.
+  const openDetail = () => navigate(`/trucks/${truck._id}`)
 
-  // The action row swap is what makes this component reusable across roles.
-  // If `actions` is provided, drivers' Log Mileage button (or any other
-  // future custom action) renders in place of the default Edit/Remove pair.
   const defaultActions = (
     <>
-      <button className="btn-ghost btn-sm" onClick={onEdit}>✎ Edit</button>
-      <button className="btn-danger btn-sm" onClick={onDelete}>✕ Remove</button>
+      {onLogMileage && (
+        <button className="btn-primary btn-sm" onClick={onLogMileage}>Log Mileage</button>
+      )}
+      {onEdit && (
+        <button className="btn-ghost btn-sm" onClick={onEdit}>✎ Edit</button>
+      )}
+      {onDelete && (
+        <button className="btn-danger btn-sm" onClick={onDelete}>✕ Remove</button>
+      )}
     </>
   )
 

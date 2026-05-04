@@ -22,13 +22,19 @@ import (
 // Role + FleetID are included so the frontend can render role-aware UI
 // without a second round-trip. They are non-secret to the owning session
 // (the same values already ride in the access token).
+//
+// UserID on the wire is _id.Hex() — that string is the canonical user
+// identifier across the rest of the API surface (JWT.userID claim, load
+// driver_id, FleetDriverResponse.UserID). The user document carries an
+// optional denormalized `user_id` BSON field that is no longer authoritative
+// and may be empty on records created before this projection landed.
 type userProfileProjection struct {
-	UserID    string `bson:"user_id"`
-	FirstName string `bson:"first_name"`
-	LastName  string `bson:"last_name"`
-	Email     string `bson:"email"`
-	Role      string `bson:"role"`
-	FleetID   string `bson:"fleet_id"`
+	ID        bson.ObjectID `bson:"_id"`
+	FirstName string        `bson:"first_name"`
+	LastName  string        `bson:"last_name"`
+	Email     string        `bson:"email"`
+	Role      string        `bson:"role"`
+	FleetID   string        `bson:"fleet_id"`
 }
 
 // GetUserProfile returns the authenticated user's profile fields.
@@ -55,7 +61,7 @@ func GetUserProfile(c *gin.Context) {
 	userCollection := database.GetUserCollection()
 
 	opts := options.FindOne().SetProjection(bson.M{
-		"user_id":    1,
+		"_id":        1,
 		"first_name": 1,
 		"last_name":  1,
 		"email":      1,
@@ -71,7 +77,7 @@ func GetUserProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, models.UserResponse{
-		UserID:    profile.UserID,
+		UserID:    profile.ID.Hex(),
 		FirstName: profile.FirstName,
 		LastName:  profile.LastName,
 		Email:     profile.Email,

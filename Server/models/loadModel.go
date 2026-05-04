@@ -58,7 +58,11 @@ type Stop struct {
 type Load struct {
 	ID        bson.ObjectID `bson:"_id,omitempty"      json:"_id,omitempty"`
 	FleetID   string        `bson:"fleet_id"           json:"fleet_id"`
-	DriverID  string        `bson:"driver_id"          json:"driver_id"             validate:"required"`
+	// DriverID is optional. Empty string = unassigned (owner-operator workflow:
+	// owner created the load but has not picked a driver yet, OR is driving it
+	// themselves and chose not to self-assign). Owner self-assignment stores the
+	// owner's own user_id here.
+	DriverID  string        `bson:"driver_id"          json:"driver_id"`
 	TruckID   string        `bson:"truck_id,omitempty" json:"truck_id,omitempty"`
 	CreatedBy string        `bson:"created_by"         json:"created_by"`
 
@@ -91,7 +95,10 @@ type Load struct {
 // server-managed and must never be settable by the client (mass-assignment
 // defense). Adding a new field here exposes it to untrusted input.
 type LoadCreateRequest struct {
-	DriverID        string  `json:"driver_id"        validate:"required"`
+	// DriverID may be empty (unassigned) or the caller's own user_id (owner
+	// self-assigning as the operator on a single-truck fleet). Any other value
+	// must resolve to a driver in the caller's fleet — see resolveAssignee.
+	DriverID        string  `json:"driver_id"        validate:"omitempty"`
 	TruckID         string  `json:"truck_id"         validate:"omitempty"`
 	ReferenceNumber string  `json:"reference_number" validate:"omitempty,max=50"`
 	Stops           []Stop  `json:"stops"            validate:"required,min=2,dive"`

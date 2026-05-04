@@ -23,6 +23,7 @@ export default function Login() {
   const [lastName, setLastName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
+  const [regPasswordConfirm, setRegPasswordConfirm] = useState('')
 
   const switchTab = (t: Tab) => {
     setTab(t)
@@ -48,6 +49,10 @@ export default function Login() {
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    if (regPassword !== regPasswordConfirm) {
+      setError('Passwords do not match.')
+      return
+    }
     setLoading(true)
     try {
       await register({
@@ -192,6 +197,19 @@ export default function Login() {
                 required
               />
               <small className="field-hint">Must be at least 12 characters.</small>
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">Confirm Password</label>
+              <input
+                className="field-input"
+                type="password"
+                value={regPasswordConfirm}
+                onChange={e => setRegPasswordConfirm(e.target.value)}
+                placeholder="••••••••"
+                minLength={12}
+                required
+              />
             </div>
 
             {error && <div className="login-error">{error}</div>}

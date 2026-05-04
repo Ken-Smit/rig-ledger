@@ -490,6 +490,26 @@ button {
   white-space: nowrap;
 }
 
+/* Driver dashboard Units rows: action + label layout (distinct from the
+   4-column activity grid). Flex with space-between keeps the button glued
+   to the right edge and lets the label/date stack on narrow viewports. */
+.db-unit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,229,255,0.06);
+  flex-wrap: wrap;
+}
+.db-unit-row:last-child { border-bottom: none; }
+.db-unit-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 /* Fleet header */
 .fleet-header {
   display: flex;
@@ -874,7 +894,10 @@ button {
 .field-input:focus {
   border-color: var(--cyan);
   box-shadow: 0 0 10px var(--cyan-glow);
-  background: var(--cyan-dim);
+  /* background-color (not shorthand) so .field-select keeps its SVG arrow.
+     color-mix layers a 6% cyan tint on the opaque card bg so the body's
+     dot-grid pattern doesn't bleed through a translucent focus state. */
+  background-color: color-mix(in srgb, var(--bg-card), var(--cyan) 6%);
 }
 .field-input[type="date"] { color-scheme: dark; }
 [data-theme="light"] .field-input[type="date"] { color-scheme: light; }

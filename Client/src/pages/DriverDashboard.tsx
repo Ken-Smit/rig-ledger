@@ -12,16 +12,6 @@ import LoadCard from '../components/LoadCard'
 import { MileageLogModal } from '../components/MileageLogModal'
 import { useAuth } from '../auth/AuthProvider'
 
-// todayLocal mirrors the modal's helper so the "Today's Logs" stat counts
-// against the user's local date, not UTC.
-function todayLocal(): string {
-  const d = new Date()
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
-}
-
 function parseLocal(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number)
   return new Date(y, m - 1, d)
@@ -36,13 +26,6 @@ function fmt(d: string) {
 
 function unitLabelFor(t: Truck): string {
   return t.unit_number ?? `UNIT-${t._id.slice(-4).toUpperCase()}`
-}
-
-// driverTail trims a driver_id ObjectID hex down to the last 6 chars so the
-// activity panel has a stable, readable identifier without an extra
-// per-driver lookup roundtrip.
-function driverTail(id: string): string {
-  return id.slice(-6).toUpperCase()
 }
 
 function browserTz(): string {
@@ -185,21 +168,17 @@ export default function DriverDashboard() {
     })
   }, [])
 
-  const today = todayLocal()
-  const todaysLogCount = useMemo(
-    () => logs.filter(l => l.date === today).length,
-    [logs, today],
-  )
-
-  // Recent activity = last 7 days, newest first.
+  // Recent activity = last 7 days of THIS driver's own mileage logs, newest
+  // first. Co-driver entries belong on the owner dashboard, not here.
   const recent = useMemo(() => {
     const cutoff = new Date()
     cutoff.setHours(0, 0, 0, 0)
     cutoff.setDate(cutoff.getDate() - 6)
+    const myID = user?.user_id
     return [...logs]
-      .filter(l => parseLocal(l.date) >= cutoff)
+      .filter(l => l.driver_id === myID && parseLocal(l.date) >= cutoff)
       .sort((a, b) => b.date.localeCompare(a.date))
-  }, [logs])
+  }, [logs, user])
 
   const truckLabel = useCallback(
     (id: string) => {
@@ -219,6 +198,21 @@ export default function DriverDashboard() {
     },
     [logs],
   )
+
+  // todaysTruck summarizes which rig the driver is in today. Picks the truck
+  // on the first sorted load (in-progress wins, then earliest pickup). When
+  // multiple loads use distinct trucks, append "+N" so the driver sees there
+  // is a swap coming.
+  const todaysTruck = useMemo(() => {
+    const withTrucks = todaysActiveLoads.filter(l => l.truck_id)
+    if (withTrucks.length === 0) return null
+    const primary = withTrucks[0].truck_id as string
+    const distinct = new Set(withTrucks.map(l => l.truck_id as string))
+    return {
+      label: truckLabel(primary),
+      extra: distinct.size > 1 ? distinct.size - 1 : 0,
+    }
+  }, [todaysActiveLoads, truckLabel])
 
   const greeting = user ? `Welcome, ${user.first_name}` : 'Welcome'
   const todayDisplay = new Date().toLocaleDateString('en-US', {
@@ -289,19 +283,25 @@ export default function DriverDashboard() {
 
               <div className="stats-row db-stats-row">
                 <div className="stat-card">
-                  <div className="stat-label">Total Fleet</div>
-                  <div className="stat-value">
-                    {String(trucks.length).padStart(2, '0')}
+                  <div className="stat-label">Today's Truck</div>
+                  <div className="stat-value text-cyan">
+                    {todaysTruck ? todaysTruck.label : '—'}
                   </div>
-                  <div className="stat-sub">Registered Units</div>
+                  <div className="stat-sub">
+                    {todaysTruck
+                      ? todaysTruck.extra > 0
+                        ? `+${todaysTruck.extra} other unit${todaysTruck.extra > 1 ? 's' : ''} today`
+                        : 'Assigned for today'
+                      : 'No truck assigned'}
+                  </div>
                 </div>
 
                 <div className="stat-card">
-                  <div className="stat-label">Today's Logs</div>
+                  <div className="stat-label">Today's Loads</div>
                   <div className="stat-value text-cyan">
-                    {String(todaysLogCount).padStart(2, '0')}
+                    {String(todaysActiveLoads.length).padStart(2, '0')}
                   </div>
-                  <div className="stat-sub">Mileage Entries Today</div>
+                  <div className="stat-sub">Scheduled Or In Progress</div>
                 </div>
               </div>
 
@@ -320,21 +320,21 @@ export default function DriverDashboard() {
                       {trucks.map(t => {
                         const last = lastLoggedFor(t._id)
                         return (
-                          <div key={t._id} className="db-activity-row">
-                            <span className="db-act-unit">
-                              {unitLabelFor(t)}
-                            </span>
-                            <span className="db-act-date text-dim">
-                              {last ? `Last logged ${fmt(last.date)}` : 'No logs yet'}
-                            </span>
-                            <span style={{ marginLeft: 'auto' }}>
-                              <button
-                                className="btn-primary btn-sm"
-                                onClick={() => setModalTruck(t)}
-                              >
-                                Log Mileage
-                              </button>
-                            </span>
+                          <div key={t._id} className="db-unit-row">
+                            <div className="db-unit-row-text">
+                              <span className="db-act-unit">
+                                {unitLabelFor(t)}
+                              </span>
+                              <span className="db-act-date text-dim">
+                                {last ? `Last logged ${fmt(last.date)}` : 'No logs yet'}
+                              </span>
+                            </div>
+                            <button
+                              className="btn-primary btn-sm"
+                              onClick={() => setModalTruck(t)}
+                            >
+                              Log Mileage
+                            </button>
                           </div>
                         )
                       })}
@@ -360,9 +360,6 @@ export default function DriverDashboard() {
                           <span className="db-act-date">{fmt(l.date)}</span>
                           <span className="db-act-unit">
                             {truckLabel(l.truck_id)}
-                          </span>
-                          <span className="text-dim">
-                            Driver {driverTail(l.driver_id)}
                           </span>
                           <span className="db-act-amount text-cyan">
                             {l.start_mileage != null
