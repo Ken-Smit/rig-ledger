@@ -24,6 +24,7 @@ export default function DriverRegister() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
 
   useEffect(() => {
     if (!token) {
@@ -51,6 +52,10 @@ export default function DriverRegister() {
     e.preventDefault()
     if (!token) return
     setError('')
+    if (password !== passwordConfirm) {
+      setError('Passwords do not match.')
+      return
+    }
     setSubmitting(true)
     try {
       await loginAsDriver({
@@ -192,6 +197,18 @@ export default function DriverRegister() {
                 <small className="field-hint">
                   Must be at least 12 characters.
                 </small>
+              </div>
+
+              <div className="field-group">
+                <label className="field-label">Confirm Password</label>
+                <input
+                  className="field-input"
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={e => setPasswordConfirm(e.target.value)}
+                  minLength={12}
+                  required
+                />
               </div>
 
               {error && <div className="login-error">{error}</div>}

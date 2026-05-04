@@ -14,7 +14,7 @@ services:
       - key: GIN_MODE
         value: release
       - key: ALLOWED_ORIGIN
-        value: https://rig-ledger.onrender.com
+        value: https://app.rig-ledger.com
 
   # Frontend Static Site
   - type: web
@@ -33,4 +33,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://rig-ledgerapi.onrender.com
+        value: https://api.rig-ledger.com

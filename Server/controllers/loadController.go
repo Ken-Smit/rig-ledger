@@ -48,6 +48,28 @@ func assertDriverInFleet(ctx context.Context, driverHex, fleetID string) error {
 	).Err()
 }
 
+// resolveAssignee validates a driver_id supplied to CreateLoad/UpdateLoad.
+// Three legal cases:
+//
+//  1. Empty string → unassigned (owner-operator may not have picked a driver).
+//  2. driverHex == callerID → owner self-assignment. Owner-only routes are
+//     gated by RequireOwner, so callerID is the owner's user_id; the owner is
+//     not in the role=driver set, so assertDriverInFleet would reject them.
+//  3. Otherwise → must resolve via assertDriverInFleet.
+//
+// SECURITY: this helper is only safe inside owner-only handlers. Calling it
+// from a route that isn't behind RequireOwner would let a driver smuggle
+// driver_id == own userID and bypass assertDriverInFleet's role pin.
+func resolveAssignee(ctx context.Context, driverHex, fleetID, callerID string) error {
+	if driverHex == "" {
+		return nil
+	}
+	if driverHex == callerID {
+		return nil
+	}
+	return assertDriverInFleet(ctx, driverHex, fleetID)
+}
+
 // User-facing copy for the multi-stop validator. Intentionally authored
 // in plain-English, actionable language so the modal can render the message
 // verbatim — non-technical operators must be able to act on the feedback.
@@ -213,7 +235,7 @@ func CreateLoad(c *gin.Context) {
 	ctx, cancel := dbCtx(c)
 	defer cancel()
 
-	if err := assertDriverInFleet(ctx, req.DriverID, fleetID); err != nil {
+	if err := resolveAssignee(ctx, req.DriverID, fleetID, userID); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Driver not found"})
 			return
@@ -263,6 +285,7 @@ func CreateLoad(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create load"})
 		return
 	}
+	log.Printf("CreateLoad: inserted id=%s fleet=%s driver=%q created_by=%s", load.ID.Hex(), fleetID, load.DriverID, userID)
 
 	c.JSON(http.StatusCreated, load)
 }
@@ -401,8 +424,9 @@ func GetLoad(c *gin.Context) {
 //     mid-trip would lose the started_at attribution.
 //   - Truck reassignment is allowed at any status (real scenario: truck swap).
 func UpdateLoad(c *gin.Context) {
+	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
+	if userID == "" || fleetID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -445,7 +469,7 @@ func UpdateLoad(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Complete or revert the load before reassigning"})
 			return
 		}
-		if err := assertDriverInFleet(ctx, *req.DriverID, fleetID); err != nil {
+		if err := resolveAssignee(ctx, *req.DriverID, fleetID, userID); err != nil {
 			if errors.Is(err, mongo.ErrNoDocuments) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Driver not found"})
 				return
@@ -579,7 +603,11 @@ func ListMyLoads(c *gin.Context) {
 
 	filter := bson.M{"driver_id": userID, "fleet_id": fleetID}
 
-	if dateStr := c.Query("date"); dateStr != "" || c.Query("tz") != "" {
+	// Only narrow by date when the caller explicitly asks for a single day.
+	// tz alone is metadata for bucketing — it must not implicitly filter,
+	// or upcoming / completed loads disappear from MyLoads and any in-progress
+	// load whose pickup was yesterday vanishes from the driver dashboard.
+	if dateStr := c.Query("date"); dateStr != "" {
 		startUTC, endUTC, msg := parseLocalDateRange(dateStr, c.Query("tz"))
 		if msg != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
@@ -598,6 +626,7 @@ func ListMyLoads(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch loads"})
 		return
 	}
+	log.Printf("ListMyLoads: driver=%s fleet=%s filter=%v total=%d", userID, fleetID, filter, total)
 
 	opts := options.Find().
 		SetSort(bson.D{{Key: "scheduled_pickup_at", Value: 1}}).

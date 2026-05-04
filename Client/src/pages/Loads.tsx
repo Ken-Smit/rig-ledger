@@ -27,7 +27,7 @@ const STATUS_FILTERS: { value: '' | LoadStatus; label: string }[] = [
 // MyLoads instead via App.tsx role gating.
 export default function Loads() {
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
 
   const [loads, setLoads] = useState<Load[]>([])
   const [drivers, setDrivers] = useState<FleetDriver[]>([])
@@ -72,11 +72,15 @@ export default function Loads() {
 
   const driverLabelFor = useCallback(
     (driverId: string) => {
+      if (driverId === '') return 'Unassigned'
+      if (user && driverId === user.user_id) {
+        return `${user.first_name} ${user.last_name} (You)`
+      }
       const d = drivers.find((d) => d.user_id === driverId)
       if (d) return `${d.first_name} ${d.last_name}`
       return driverId.slice(-6).toUpperCase()
     },
-    [drivers],
+    [drivers, user],
   )
 
   const truckLabelFor = useCallback(
@@ -109,8 +113,6 @@ export default function Loads() {
       setError('Failed to delete load')
     }
   }
-
-  const noDrivers = drivers.length === 0
 
   // Group loads by scheduled pickup date for an at-a-glance owner view.
   const grouped = useMemo(() => {
@@ -146,22 +148,10 @@ export default function Loads() {
             <button
               className="btn-primary"
               onClick={() => setShowAdd(true)}
-              disabled={noDrivers}
-              title={noDrivers ? 'Invite a driver before creating loads' : undefined}
             >
               + New Load
             </button>
           </div>
-
-          {noDrivers && !loading && (
-            <div className="alert-error">
-              You have no drivers yet.{' '}
-              <a href="/invites" style={{ textDecoration: 'underline' }}>
-                Invite a driver first
-              </a>
-              .
-            </div>
-          )}
 
           <div
             className="modal-row"
@@ -195,9 +185,7 @@ export default function Loads() {
               <div className="empty-icon">⬡</div>
               <p>No loads yet</p>
               <p className="text-dim">
-                {noDrivers
-                  ? 'Invite a driver to start assigning loads'
-                  : 'Create your first load to assign work to a driver'}
+                Create your first load — assign a driver, leave it unassigned, or drive it yourself
               </p>
             </div>
           ) : (

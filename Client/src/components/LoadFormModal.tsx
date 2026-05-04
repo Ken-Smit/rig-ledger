@@ -3,6 +3,26 @@ import type { FleetDriver, Load, LoadCreateData, LoadUpdateData, Stop } from '..
 import { LOAD_STATUS_PENDING, STOP_KIND_DROPOFF, STOP_KIND_PICKUP } from '../types/load'
 import type { Truck } from '../types/truck'
 import StopFieldGroup from './StopFieldGroup'
+import { useAuth } from '../auth/AuthProvider'
+import type { AuthUser } from '../types/user'
+
+// lockedDriverLabel renders the read-only assignee field shown once a load is
+// past pending. Resolves owner-self → "{name} (You)", an in-fleet driver → full
+// name, empty → "Unassigned", and falls back to the raw id if a foreign driver
+// somehow leaks through (defensive — should never happen given fleet scoping).
+function lockedDriverLabel(
+  driverID: string,
+  drivers: FleetDriver[],
+  user: AuthUser | null,
+): string {
+  if (driverID === '') return 'Unassigned'
+  if (user && driverID === user.user_id) {
+    return `${user.first_name} ${user.last_name} (You)`
+  }
+  const d = drivers.find((d) => d.user_id === driverID)
+  if (d) return `${d.first_name} ${d.last_name}`
+  return driverID
+}
 
 interface Props {
   initial?: Load | null
@@ -53,11 +73,17 @@ export default function LoadFormModal({
   onUpdate,
   onClose,
 }: Props) {
+  const { user } = useAuth()
   const isEdit = !!initial
   const editLockedDriver =
     isEdit && initial!.status !== LOAD_STATUS_PENDING
 
-  const [driverID, setDriverID] = useState(initial?.driver_id ?? '')
+  // Owner-operator workflow: on Create, default the assignee to the owner so
+  // a single-truck operator does not have to interact with the dropdown at
+  // all. Empty string ("Unassigned") is also a valid choice.
+  const [driverID, setDriverID] = useState(
+    initial?.driver_id ?? user?.user_id ?? '',
+  )
   const [truckID, setTruckID] = useState(initial?.truck_id ?? '')
   const [referenceNumber, setReferenceNumber] = useState(initial?.reference_number ?? '')
   const [stops, setStops] = useState<Stop[]>(
@@ -95,7 +121,6 @@ export default function LoadFormModal({
   }
 
   const validate = (): string | null => {
-    if (!driverID) return 'Pick a driver'
     if (stops.length < 2) return 'Add at least one pickup and one dropoff'
     if (stops[0].kind !== STOP_KIND_PICKUP) return 'First stop must be a pickup'
     let hasPickup = false
@@ -177,13 +202,11 @@ export default function LoadFormModal({
           <div className="modal-section-label">Assignment</div>
           <div className="modal-row">
             <div className="field-group">
-              <label className="field-label">Driver *</label>
+              <label className="field-label">Driver</label>
               {editLockedDriver ? (
                 <input
                   className="field-input"
-                  value={drivers.find((d) => d.user_id === driverID)
-                    ? `${drivers.find((d) => d.user_id === driverID)!.first_name} ${drivers.find((d) => d.user_id === driverID)!.last_name}`
-                    : driverID}
+                  value={lockedDriverLabel(driverID, drivers, user)}
                   readOnly
                 />
               ) : (
@@ -191,14 +214,18 @@ export default function LoadFormModal({
                   className="field-select"
                   value={driverID}
                   onChange={(e) => setDriverID(e.target.value)}
-                  required
                 >
-                  <option value="">Select a driver...</option>
+                  {user && (
+                    <option value={user.user_id}>
+                      {user.first_name} {user.last_name} (You)
+                    </option>
+                  )}
                   {drivers.map((d) => (
                     <option key={d.user_id} value={d.user_id}>
                       {d.first_name} {d.last_name}
                     </option>
                   ))}
+                  <option value="">Unassigned</option>
                 </select>
               )}
             </div>

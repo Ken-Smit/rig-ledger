@@ -116,16 +116,7 @@ export default function Fleet() {
                   truck={truck}
                   onEdit={isOwner ? () => setEditingTruck(truck) : undefined}
                   onDelete={isOwner ? () => handleDelete(truck._id) : undefined}
-                  actions={
-                    isOwner ? undefined : (
-                      <button
-                        className="btn-primary btn-sm"
-                        onClick={() => setMileageTruck(truck)}
-                      >
-                        Log Mileage
-                      </button>
-                    )
-                  }
+                  onLogMileage={() => setMileageTruck(truck)}
                 />
               ))}
             </div>
