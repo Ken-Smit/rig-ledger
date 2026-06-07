@@ -2,17 +2,17 @@ package controllers
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/models"
+	"github.com/Ken-Smit/RigLedgerServer/services"
 	"github.com/Ken-Smit/RigLedgerServer/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -20,6 +20,26 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// One-time token lifetimes. Verification links last a day so a user can act on
+// the email at their convenience; reset links are short so a leaked link has a
+// narrow window. Tokens are single-use regardless — consuming one clears it.
+const (
+	verifyTokenTTL = 24 * time.Hour
+	resetTokenTTL  = 1 * time.Hour
+)
+
+// appBaseURL returns the frontend origin used to build emailed links. It prefers
+// APP_BASE_URL and falls back to ALLOWED_ORIGIN (the SPA origin already required
+// for CORS) so a same-site deploy needs no extra config. Any trailing slash is
+// trimmed so link building can always append "/path".
+func appBaseURL() string {
+	base := os.Getenv("APP_BASE_URL")
+	if base == "" {
+		base = os.Getenv("ALLOWED_ORIGIN")
+	}
+	return strings.TrimRight(base, "/")
+}
 
 // userValidator validates user-facing request DTOs (UserProfileUpdate, etc.).
 // Reused per validator/v10 best practice — instances cache reflection metadata
@@ -132,16 +152,6 @@ func emailExists(ctx context.Context, col *mongo.Collection, email string) (bool
 	return false, err
 }
 
-// hashInviteToken derives the storage form of an invite token (sha256, hex).
-// The raw token is shown to the inviter exactly once; the database only ever
-// holds the hash, so a database read cannot yield a usable invite credential.
-// Same primitive is used by CreateInvite, RegisterDriver, and LookupInvite —
-// see invite_handlers.go for the inverse generation path.
-func hashInviteToken(rawToken string) string {
-	sum := sha256.Sum256([]byte(rawToken))
-	return hex.EncodeToString(sum[:])
-}
-
 // Register creates a new owner account and provisions the owner's first fleet.
 //
 // SECURITY: binds RegisterRequest (NOT models.User) so a registrant cannot
@@ -193,15 +203,29 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// Generate a one-time email-verification token. The raw value goes only into
+	// the emailed link; the database holds the sha256 hash + expiry. A crypto/rand
+	// failure is a true 500 — we never fall back to a weaker source.
+	rawVerifyToken, verifyHash, err := utils.GenerateSecureToken()
+	if err != nil {
+		log.Printf("Register: verify token generation failed email=%s: %v", req.Email, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+
 	now := time.Now()
+	verifyExp := now.Add(verifyTokenTTL)
 	user := models.User{
-		ID:        bson.NewObjectID(),
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Email:     req.Email,
-		Password:  hashedPassword,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:              bson.NewObjectID(),
+		FirstName:       req.FirstName,
+		LastName:        req.LastName,
+		Email:           req.Email,
+		Password:        hashedPassword,
+		EmailVerified:   false,
+		VerifyTokenHash: verifyHash,
+		VerifyTokenExp:  &verifyExp,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if _, err := userCollection.InsertOne(ctx, user); err != nil {
@@ -224,7 +248,16 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
+	// Send the verification email. A send failure is logged but does NOT fail
+	// registration: the user + token are already persisted, so the account can
+	// be activated later via Resend verification. The token itself is never
+	// logged.
+	verifyLink := fmt.Sprintf("%s/verify-email?token=%s", appBaseURL(), rawVerifyToken)
+	if err := services.SendVerificationEmail(user.Email, verifyLink); err != nil {
+		log.Printf("Register: verification email send failed user=%s: %v", user.ID.Hex(), err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Check your email to verify your account."})
 }
 
 // bootstrapOwnerFleet creates the first fleet for a freshly-inserted owner and
@@ -303,7 +336,20 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 3. Defense-in-depth: refuse to issue a token for a user with no role.
+	// 3. Hard email-verification gate. A registrant must prove ownership of the
+	// email before any session is issued. The stable "code" lets the SPA show a
+	// "resend verification" affordance instead of a generic error. Legacy users
+	// are backfilled to verified at startup, so this never blocks an existing
+	// account.
+	if !foundUser.EmailVerified {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Please verify your email before signing in.",
+			"code":  "email_unverified",
+		})
+		return
+	}
+
+	// 4. Defense-in-depth: refuse to issue a token for a user with no role.
 	// This should never happen post-migration; if it does, the access token
 	// would have role="" and every owner-only middleware check would fail
 	// silently with a confusing 403. Fail loud, fail server-side.
@@ -370,7 +416,7 @@ func RegisterDriver(c *gin.Context) {
 	// 1. Look up the invite by token hash.
 	inviteCol := database.GetInviteCollection()
 	var invite models.Invite
-	err := inviteCol.FindOne(ctx, bson.M{"token_hash": hashInviteToken(req.Token)}).Decode(&invite)
+	err := inviteCol.FindOne(ctx, bson.M{"token_hash": utils.HashToken(req.Token)}).Decode(&invite)
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
 			log.Printf("RegisterDriver: invite lookup failed: %v", err)
@@ -591,4 +637,229 @@ func Logout(c *gin.Context) {
 
 	utils.ClearAuthCookies(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
+}
+
+// VerifyEmail consumes a one-time verification token and marks the account
+// verified, unlocking login.
+//
+// SECURITY: the raw token is hashed before lookup; the query also requires a
+// non-expired token. "not found" and "expired" collapse into one generic
+// message so the endpoint is not an oracle for valid tokens. The token fields
+// are cleared on success so a link cannot be replayed.
+func VerifyEmail(c *gin.Context) {
+	var req models.VerifyEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, err, "This verification link is invalid or has expired.")
+		return
+	}
+	if err := userValidator.Struct(req); err != nil {
+		badRequest(c, err, "This verification link is invalid or has expired.")
+		return
+	}
+
+	ctx, cancel := dbCtx(c)
+	defer cancel()
+	userCollection := database.GetUserCollection()
+
+	filter := bson.M{
+		"verify_token_hash": utils.HashToken(req.Token),
+		"verify_token_exp":  bson.M{"$gt": time.Now()},
+	}
+	update := bson.M{
+		"$set":   bson.M{"email_verified": true, "updated_at": time.Now()},
+		"$unset": bson.M{"verify_token_hash": "", "verify_token_exp": ""},
+	}
+
+	res, err := userCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		log.Printf("VerifyEmail: update failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify email"})
+		return
+	}
+	if res.MatchedCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This verification link is invalid or has expired."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Your email has been verified. You can now sign in."})
+}
+
+// ResendVerification re-issues a verification link for an unverified account.
+//
+// SECURITY: this endpoint ALWAYS returns the same generic success, whether or
+// not the email maps to an account (and whether or not it is already verified),
+// so it cannot be used to enumerate registered emails. Work happens only when a
+// genuinely-unverified user exists.
+func ResendVerification(c *gin.Context) {
+	var req models.ResendVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, err, "Please enter a valid email address")
+		return
+	}
+	if err := userValidator.Struct(req); err != nil {
+		badRequest(c, err, "Please enter a valid email address")
+		return
+	}
+
+	ctx, cancel := dbCtx(c)
+	defer cancel()
+	userCollection := database.GetUserCollection()
+
+	const genericMsg = "If that account exists and is unverified, we've sent a new verification link."
+
+	var foundUser models.User
+	err := userCollection.FindOne(ctx, bson.M{"email": req.Email}).Decode(&foundUser)
+	if err != nil || foundUser.EmailVerified {
+		// No account, or already verified — say nothing either way.
+		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			log.Printf("ResendVerification: lookup failed: %v", err)
+		}
+		c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+		return
+	}
+
+	rawToken, hash, err := utils.GenerateSecureToken()
+	if err != nil {
+		log.Printf("ResendVerification: token generation failed user=%s: %v", foundUser.ID.Hex(), err)
+		c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+		return
+	}
+	exp := time.Now().Add(verifyTokenTTL)
+	_, err = userCollection.UpdateOne(ctx,
+		bson.M{"_id": foundUser.ID},
+		bson.M{"$set": bson.M{"verify_token_hash": hash, "verify_token_exp": exp, "updated_at": time.Now()}},
+	)
+	if err != nil {
+		log.Printf("ResendVerification: token persist failed user=%s: %v", foundUser.ID.Hex(), err)
+		c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+		return
+	}
+
+	link := fmt.Sprintf("%s/verify-email?token=%s", appBaseURL(), rawToken)
+	if err := services.SendVerificationEmail(foundUser.Email, link); err != nil {
+		log.Printf("ResendVerification: email send failed user=%s: %v", foundUser.ID.Hex(), err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+}
+
+// ForgotPassword issues a one-time password-reset link.
+//
+// SECURITY: ALWAYS returns the same generic success regardless of whether the
+// email exists — no enumeration oracle. The reset token is stored hashed with a
+// short TTL; the raw token only lives in the emailed link.
+func ForgotPassword(c *gin.Context) {
+	var req models.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, err, "Please enter a valid email address")
+		return
+	}
+	if err := userValidator.Struct(req); err != nil {
+		badRequest(c, err, "Please enter a valid email address")
+		return
+	}
+
+	ctx, cancel := dbCtx(c)
+	defer cancel()
+	userCollection := database.GetUserCollection()
+
+	const genericMsg = "If an account exists for that email, we've sent a password reset link."
+
+	var foundUser models.User
+	err := userCollection.FindOne(ctx, bson.M{"email": req.Email}).Decode(&foundUser)
+	if err != nil {
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			log.Printf("ForgotPassword: lookup failed: %v", err)
+		}
+		c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+		return
+	}
+
+	rawToken, hash, err := utils.GenerateSecureToken()
+	if err != nil {
+		log.Printf("ForgotPassword: token generation failed user=%s: %v", foundUser.ID.Hex(), err)
+		c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+		return
+	}
+	exp := time.Now().Add(resetTokenTTL)
+	_, err = userCollection.UpdateOne(ctx,
+		bson.M{"_id": foundUser.ID},
+		bson.M{"$set": bson.M{"reset_token_hash": hash, "reset_token_exp": exp, "updated_at": time.Now()}},
+	)
+	if err != nil {
+		log.Printf("ForgotPassword: token persist failed user=%s: %v", foundUser.ID.Hex(), err)
+		c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+		return
+	}
+
+	link := fmt.Sprintf("%s/reset-password?token=%s", appBaseURL(), rawToken)
+	if err := services.SendPasswordResetEmail(foundUser.Email, link); err != nil {
+		log.Printf("ForgotPassword: email send failed user=%s: %v", foundUser.ID.Hex(), err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": genericMsg})
+}
+
+// ResetPassword consumes a one-time reset token and sets a new password.
+//
+// SECURITY:
+//   - The raw token is hashed before lookup and must be unexpired.
+//   - The new password is re-validated against the min=12 policy and hashed at
+//     bcrypt cost 14 (same as registration).
+//   - On success the reset token is cleared (single use) AND the stored refresh
+//     token is wiped so every existing session is invalidated — a password reset
+//     should log out all other devices. The caller's own cookies are cleared too.
+//   - "not found" / "expired" collapse into one generic message.
+func ResetPassword(c *gin.Context) {
+	var req models.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, err, "This reset link is invalid or has expired.")
+		return
+	}
+	if err := userValidator.Struct(req); err != nil {
+		// A short password is the most likely validation failure here; surface
+		// the actionable policy message rather than a generic one.
+		badRequest(c, err, registrationErrorMessage(err))
+		return
+	}
+
+	ctx, cancel := dbCtx(c)
+	defer cancel()
+	userCollection := database.GetUserCollection()
+
+	var foundUser models.User
+	filter := bson.M{
+		"reset_token_hash": utils.HashToken(req.Token),
+		"reset_token_exp":  bson.M{"$gt": time.Now()},
+	}
+	if err := userCollection.FindOne(ctx, filter).Decode(&foundUser); err != nil {
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			log.Printf("ResetPassword: lookup failed: %v", err)
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This reset link is invalid or has expired."})
+		return
+	}
+
+	hashedPassword, err := HashPassword(req.Password)
+	if err != nil {
+		log.Printf("ResetPassword: bcrypt failed user=%s: %v", foundUser.ID.Hex(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset password"})
+		return
+	}
+
+	update := bson.M{
+		"$set":   bson.M{"password": hashedPassword, "refresh_token": "", "updated_at": time.Now()},
+		"$unset": bson.M{"reset_token_hash": "", "reset_token_exp": ""},
+	}
+	if _, err := userCollection.UpdateOne(ctx, bson.M{"_id": foundUser.ID}, update); err != nil {
+		log.Printf("ResetPassword: update failed user=%s: %v", foundUser.ID.Hex(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset password"})
+		return
+	}
+
+	// Clear any cookies the caller might still hold so the reset device is also
+	// logged out and must sign in with the new password.
+	utils.ClearAuthCookies(c)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Your password has been reset. You can now sign in."})
 }

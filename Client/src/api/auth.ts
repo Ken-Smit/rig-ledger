@@ -60,6 +60,63 @@ export const registerDriver = async (
   return res.data
 }
 
+// MessageResponse is the shape of the verification / reset endpoints, which all
+// return a single human-readable message and never a token or session state.
+export interface MessageResponse {
+  message: string
+}
+
+// verifyEmail consumes the one-time token from the verification link and, on
+// success, unlocks login for the account.
+export const verifyEmail = async (
+  token: string,
+): Promise<MessageResponse> => {
+  const res = await client.post<MessageResponse>(
+    '/api/v1/auth/verify-email',
+    { token },
+  )
+  return res.data
+}
+
+// resendVerification re-sends a verification link. The server always responds
+// with a generic message regardless of whether the account exists, so the
+// caller must not infer account existence from the result.
+export const resendVerification = async (
+  email: string,
+): Promise<MessageResponse> => {
+  const res = await client.post<MessageResponse>(
+    '/api/v1/auth/resend-verification',
+    { email },
+  )
+  return res.data
+}
+
+// forgotPassword requests a password-reset link. Like resendVerification, the
+// response is intentionally generic.
+export const forgotPassword = async (
+  email: string,
+): Promise<MessageResponse> => {
+  const res = await client.post<MessageResponse>(
+    '/api/v1/auth/forgot-password',
+    { email },
+  )
+  return res.data
+}
+
+// resetPassword consumes the one-time reset token and sets a new password. On
+// success every existing session is invalidated server-side, so the user must
+// sign in again with the new password.
+export const resetPassword = async (
+  token: string,
+  password: string,
+): Promise<MessageResponse> => {
+  const res = await client.post<MessageResponse>(
+    '/api/v1/auth/reset-password',
+    { token, password },
+  )
+  return res.data
+}
+
 // Logout relies on the server clearing both auth cookies. There is nothing
 // for the client to clean up — no token is held in JS memory or storage.
 export const logout = async (): Promise<void> => {

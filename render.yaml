@@ -15,6 +15,16 @@ services:
         value: release
       - key: ALLOWED_ORIGIN
         value: https://app.rig-ledger.com
+      # Frontend origin for verification / reset links. Falls back to
+      # ALLOWED_ORIGIN in code, but set explicitly for clarity.
+      - key: APP_BASE_URL
+        value: https://app.rig-ledger.com
+      # Resend transactional email — required in release mode (server fails
+      # fast at boot if either is missing).
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
 
   # Frontend Static Site
   - type: web

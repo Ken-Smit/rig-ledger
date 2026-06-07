@@ -341,6 +341,24 @@ func RunMigration(ctx context.Context) error {
 	trucks := GetTruckCollection()
 	expenses := GetExpenseCollection()
 
+	// Backfill email verification for legacy users. Accounts that predate the
+	// verification gate have no email_verified field; mark them verified so the
+	// new hard gate in Login never locks out an existing user. Idempotent — only
+	// documents missing the field are touched, so reruns are no-ops. A failure
+	// here is returned (fatal at startup) because letting the gate apply to
+	// un-backfilled users would lock real operators out of their accounts.
+	verifyRes, err := users.UpdateMany(ctx,
+		bson.M{"email_verified": bson.M{"$exists": false}},
+		bson.M{"$set": bson.M{"email_verified": true}},
+	)
+	if err != nil {
+		log.Printf("RunMigration: email_verified backfill failed: %v", err)
+		return err
+	}
+	if verifyRes.ModifiedCount > 0 {
+		log.Printf("RunMigration: backfilled email_verified=true on %d legacy user(s)", verifyRes.ModifiedCount)
+	}
+
 	// Predicate: role missing OR empty. Covers both legacy docs (no field)
 	// and any partially-written docs that landed with role:"".
 	filter := bson.M{

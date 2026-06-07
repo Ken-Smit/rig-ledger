@@ -1,8 +1,6 @@
 package controllers
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"log"
 	"net/http"
@@ -10,19 +8,12 @@ import (
 
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/models"
+	"github.com/Ken-Smit/RigLedgerServer/utils"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
-
-// inviteTokenBytes is the entropy width of an invite token.
-//
-// 32 bytes = 256 bits of randomness — the storage form is hex(sha256(raw)),
-// so an attacker who exfiltrates the invite collection cannot brute-force the
-// raw token under SHA-256 (and the raw token never lives in the DB at all).
-// 64 hex characters in the URL is acceptable for one-time emailed links.
-const inviteTokenBytes = 32
 
 // inviteListing is the safe projection shape for GetInvites. Mirrors
 // models.Invite EXCEPT it has no TokenHash field — owners listing their
@@ -36,29 +27,6 @@ type inviteListing struct {
 	ExpiresAt  time.Time     `bson:"expires_at" json:"expires_at"`
 	ConsumedAt *time.Time    `bson:"consumed_at,omitempty" json:"consumed_at,omitempty"`
 	CreatedAt  time.Time     `bson:"created_at" json:"created_at"`
-}
-
-// generateInviteToken returns the raw token (hex, shown to the inviter once)
-// and its storage form (hex(sha256(rawBytes))) used as the DB key.
-//
-// SECURITY: the raw bytes from crypto/rand are hashed BEFORE being hex-encoded
-// for storage so the hash domain is the entropy source, not the hex string.
-// hashInviteToken (in auth_handlers.go) re-derives the same hash from the hex
-// raw token at lookup time — both sides use hex(sha256([]byte(rawHex))).
-//
-// A read error from crypto/rand is propagated to the caller; we never want to
-// fall back to a weaker source.
-func generateInviteToken() (raw, hash string, err error) {
-	buf := make([]byte, inviteTokenBytes)
-	if _, err := rand.Read(buf); err != nil {
-		return "", "", err
-	}
-	raw = hex.EncodeToString(buf)
-	// Use the same hash function the redemption path uses so create+lookup
-	// agree on the storage form. hashInviteToken hashes the hex string, not
-	// the raw bytes — keep these in lockstep.
-	hash = hashInviteToken(raw)
-	return raw, hash, nil
 }
 
 // CreateInvite mints a new single-use invite for the caller's fleet.
@@ -86,7 +54,7 @@ func CreateInvite(c *gin.Context) {
 		return
 	}
 
-	rawToken, tokenHash, err := generateInviteToken()
+	rawToken, tokenHash, err := utils.GenerateSecureToken()
 	if err != nil {
 		log.Printf("CreateInvite: token generation failed fleet=%s: %v", fleetID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create invite"})
@@ -228,7 +196,7 @@ func LookupInvite(c *gin.Context) {
 
 	inviteCol := database.GetInviteCollection()
 	var invite models.Invite
-	err := inviteCol.FindOne(ctx, bson.M{"token_hash": hashInviteToken(rawToken)}).Decode(&invite)
+	err := inviteCol.FindOne(ctx, bson.M{"token_hash": utils.HashToken(rawToken)}).Decode(&invite)
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
 			log.Printf("LookupInvite: invite lookup failed: %v", err)

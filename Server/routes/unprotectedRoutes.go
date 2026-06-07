@@ -22,6 +22,14 @@ func SetupRoutes(router *gin.Engine) {
 			authGroup.POST("/register-driver", controllers.RegisterDriver)
 			authGroup.POST("/login", controllers.Login)
 			authGroup.POST("/refresh", controllers.RefreshAccessToken)
+
+			// Email verification + password reset. Unauthenticated by design
+			// (the user has no session yet) and rate-limited under the same
+			// policy to throttle token guessing and email-spam abuse.
+			authGroup.POST("/verify-email", controllers.VerifyEmail)
+			authGroup.POST("/resend-verification", controllers.ResendVerification)
+			authGroup.POST("/forgot-password", controllers.ForgotPassword)
+			authGroup.POST("/reset-password", controllers.ResetPassword)
 		}
 
 		// Invite lookup is unauthenticated by design: the recipient is not yet

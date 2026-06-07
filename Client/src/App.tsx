@@ -19,6 +19,9 @@ const Invites = lazy(() => import('./pages/Invites'))
 const DriverRegister = lazy(() => import('./pages/DriverRegister'))
 const Loads = lazy(() => import('./pages/Loads'))
 const MyLoads = lazy(() => import('./pages/MyLoads'))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 // Reuses the same spinner markup PrivateRoute uses for its auth-boot branch,
 // so users see a consistent loading state whether the wait is for AuthProvider
@@ -74,6 +77,9 @@ export default function App() {
             path="/register/driver/:token"
             element={<DriverRegister />}
           />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/"
             element={

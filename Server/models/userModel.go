@@ -43,6 +43,22 @@ type User struct {
 	CreatedAt    time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time     `bson:"updated_at" json:"updated_at"`
 	RefreshToken string        `bson:"refresh_token" json:"-"`
+
+	// EmailVerified gates login: a freshly-registered owner cannot sign in until
+	// they click the verification link. Legacy users are backfilled to true at
+	// startup so the gate never locks out an existing account.
+	EmailVerified bool `bson:"email_verified" json:"-"`
+
+	// One-time email-verification token. Only the sha256 hash and its expiry are
+	// stored — the raw token lives only in the emailed link. Cleared on consume.
+	VerifyTokenHash string     `bson:"verify_token_hash,omitempty" json:"-"`
+	VerifyTokenExp  *time.Time `bson:"verify_token_exp,omitempty" json:"-"`
+
+	// One-time password-reset token. Same hash-at-rest discipline as the verify
+	// token; shorter TTL. Cleared on consume, and consuming it also wipes the
+	// refresh token to terminate every existing session.
+	ResetTokenHash string     `bson:"reset_token_hash,omitempty" json:"-"`
+	ResetTokenExp  *time.Time `bson:"reset_token_exp,omitempty" json:"-"`
 }
 
 // RegisterRequest is the request DTO for POST /register.
@@ -99,4 +115,33 @@ type UserResponse struct {
 type UserProfileUpdate struct {
 	FirstName *string `json:"first_name" validate:"omitempty,min=2,max=100"`
 	LastName  *string `json:"last_name"  validate:"omitempty,min=2,max=100"`
+}
+
+// VerifyEmailRequest is the request DTO for POST /auth/verify-email. The token
+// is the raw value from the emailed link; the server hashes it before lookup.
+type VerifyEmailRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+// ResendVerifyRequest is the request DTO for POST /auth/resend-verification.
+// Only an email is needed — the handler returns a generic success regardless of
+// whether the account exists, so this surface is not an enumeration oracle.
+type ResendVerifyRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+// ForgotPasswordRequest is the request DTO for POST /auth/forgot-password.
+// Like ResendVerifyRequest, the handler always returns generic success.
+type ForgotPasswordRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+// ResetPasswordRequest is the request DTO for POST /auth/reset-password.
+//
+// SECURITY: this is — alongside RegisterRequest and DriverRegisterRequest — one
+// of the few DTOs permitted to accept a plaintext password. It enforces the
+// same min=12 policy. The token is the raw reset token from the emailed link.
+type ResetPasswordRequest struct {
+	Token    string `json:"token"    validate:"required"`
+	Password string `json:"password" validate:"required,min=12"`
 }

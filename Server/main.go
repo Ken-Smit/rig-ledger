@@ -22,6 +22,10 @@ const (
 	envJWTSecret          = "JWT_SECRET"
 	envMongoURI           = "MONGODB_URI"
 	envPort               = "PORT"
+	envResendAPIKey       = "RESEND_API_KEY"
+	envEmailFrom          = "EMAIL_FROM"
+	envGinMode            = "GIN_MODE"
+	ginReleaseMode        = "release"
 
 	// startupMigrationTimeout caps how long we'll spend backfilling legacy
 	// users into the new role/fleet model before failing startup. Mirrors the
@@ -43,6 +47,19 @@ func main() {
 	if mongoURI == "" {
 		log.Fatal("MONGODB_URI environment variable not set")
 	}
+
+	// Transactional email is required in production: without it new owners can
+	// never verify and locked-out users can never reset. In dev the email
+	// service no-ops (logging the would-be send) so local flows still work.
+	if os.Getenv(envGinMode) == ginReleaseMode {
+		if os.Getenv(envResendAPIKey) == "" {
+			log.Fatal("RESEND_API_KEY environment variable not set in release mode")
+		}
+		if os.Getenv(envEmailFrom) == "" {
+			log.Fatal("EMAIL_FROM environment variable not set in release mode")
+		}
+	}
+
 	database.Connect(mongoURI)
 
 	// Backfill legacy users into the role/fleet model. Idempotent — re-runs

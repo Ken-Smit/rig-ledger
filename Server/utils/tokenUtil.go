@@ -1,12 +1,46 @@
 package utils
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// secureTokenBytes is the entropy width of a one-time token (invite, email
+// verification, password reset). 32 bytes = 256 bits of randomness; the storage
+// form is hex(sha256(rawHex)), so a database exfiltration cannot yield a usable
+// token. 64 hex characters in a URL is acceptable for emailed single-use links.
+const secureTokenBytes = 32
+
+// GenerateSecureToken returns a cryptographically-random one-time token: the
+// raw value (shown to the user exactly once, e.g. embedded in an emailed link)
+// and its storage form (hex(sha256(raw))) used as the database lookup key.
+//
+// SECURITY: the database only ever holds the hash, so a leaked dump cannot be
+// replayed. A read error from crypto/rand is propagated — we never fall back to
+// a weaker randomness source. Shared by invite creation, email verification,
+// and password reset so all three agree on one entropy + hashing policy (DRY).
+func GenerateSecureToken() (raw, hash string, err error) {
+	buf := make([]byte, secureTokenBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", "", err
+	}
+	raw = hex.EncodeToString(buf)
+	return raw, HashToken(raw), nil
+}
+
+// HashToken derives the storage form of a one-time token (sha256, hex). The
+// create and lookup paths MUST both call this so they agree on the stored
+// value. It hashes the hex raw string, not the underlying random bytes.
+func HashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
 
 // Token TTLs are constants so the lifetime policy lives in one place. Access
 // tokens are short so a stolen Authorization header expires quickly; refresh

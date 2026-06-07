@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { register } from '../api/auth'
+import { Link, useNavigate } from 'react-router-dom'
+import { register, resendVerification } from '../api/auth'
 import { useAuth } from '../auth/AuthProvider'
 import { useTheme } from '../hooks/useTheme'
 
@@ -12,7 +12,12 @@ export default function Login() {
   const { login } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Tracks the "email not verified" login failure so we can offer a resend.
+  const [unverified, setUnverified] = useState(false)
+  const [resending, setResending] = useState(false)
 
   // Login fields
   const [email, setEmail] = useState('')
@@ -28,27 +33,52 @@ export default function Login() {
   const switchTab = (t: Tab) => {
     setTab(t)
     setError('')
+    setInfo('')
+    setUnverified(false)
   }
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    setInfo('')
+    setUnverified(false)
     setLoading(true)
     try {
       await login(email, password)
       // Auth state is now derived from the AuthProvider, not localStorage.
       navigate('/')
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setError(msg ?? 'Authentication failed')
+      const data = (
+        err as { response?: { data?: { error?: string; code?: string } } }
+      )?.response?.data
+      if (data?.code === 'email_unverified') {
+        setUnverified(true)
+      }
+      setError(data?.error ?? 'Authentication failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    setError('')
+    setInfo('')
+    setResending(true)
+    try {
+      const res = await resendVerification(email)
+      setUnverified(false)
+      setInfo(res.message)
+    } catch {
+      setError('Could not resend the verification email. Please try again.')
+    } finally {
+      setResending(false)
     }
   }
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    setInfo('')
     if (regPassword !== regPasswordConfirm) {
       setError('Passwords do not match.')
       return
@@ -63,6 +93,7 @@ export default function Login() {
       })
       setTab('login')
       setEmail(regEmail)
+      setInfo('Check your email to verify your account.')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
       setError(msg ?? 'Registration failed')
@@ -140,11 +171,33 @@ export default function Login() {
               />
             </div>
 
+            {info && (
+              <div className="login-error" style={{ color: 'var(--green)', borderColor: 'var(--green)' }}>
+                {info}
+              </div>
+            )}
             {error && <div className="login-error">{error}</div>}
+
+            {unverified && (
+              <button
+                type="button"
+                className="btn-ghost login-submit"
+                onClick={handleResend}
+                disabled={resending}
+              >
+                {resending ? 'Sending...' : 'Resend Verification Email'}
+              </button>
+            )}
 
             <button className="btn-primary login-submit" type="submit" disabled={loading}>
               {loading ? 'Signing In...' : 'Sign In'}
             </button>
+
+            <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+              <Link to="/forgot-password" className="field-hint">
+                Forgot password?
+              </Link>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="login-form">
