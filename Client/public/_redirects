@@ -1,5 +1,0 @@
-# SPA fallback: rewrite (status 200), NOT redirect (301). A 301 changes the
-# browser URL to /index.html, which matches no React Router route and lands the
-# user on /home — breaking deep links like /verify-email?token=... and
-# /reset-password?token=... Keep the original path so BrowserRouter can match.
-/*    /index.html   200
