@@ -13,12 +13,13 @@ services:
         generateValue: true
       - key: GIN_MODE
         value: release
+      # Apex is canonical; www 301s to apex, so the SPA runs on this exact
+      # origin. CORS allows a single exact origin — must match the browser's
+      # Origin after the www->apex redirect. Verification / reset link host
+      # (appBaseURL) falls back to this same value, so no separate
+      # APP_BASE_URL is needed.
       - key: ALLOWED_ORIGIN
-        value: https://app.rig-ledger.com
-      # Frontend origin for verification / reset links. Falls back to
-      # ALLOWED_ORIGIN in code, but set explicitly for clarity.
-      - key: APP_BASE_URL
-        value: https://app.rig-ledger.com
+        value: https://rig-ledger.com
       # Resend transactional email — required in release mode (server fails
       # fast at boot if either is missing).
       - key: RESEND_API_KEY
