@@ -23,10 +23,6 @@ import (
 // IDs.
 func GetMileageLogs(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	rawTruckID := c.Query("truck_id")
 	if rawTruckID == "" {
@@ -114,17 +110,13 @@ func GetMileageLogs(c *gin.Context) {
 func UpsertMileageLog(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
 	userID := c.GetString("userID")
-	if fleetID == "" || userID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	var req models.MileageLogUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, err, "Invalid mileage entry")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, "Invalid mileage entry")
 		return
 	}

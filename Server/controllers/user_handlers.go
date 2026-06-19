@@ -1,9 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -44,10 +41,6 @@ type userProfileProjection struct {
 // document when you only need 3 fields."
 func GetUserProfile(c *gin.Context) {
 	userID := c.GetString("userID") // extracted by JWT middleware
-	if userID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
@@ -105,10 +98,6 @@ func GetUserProfile(c *gin.Context) {
 // TODO(security): password change requires current-password re-auth + bcrypt rehash
 func UpdateUserProfile(c *gin.Context) {
 	userID := c.GetString("userID")
-	if userID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
@@ -145,24 +134,15 @@ func UpdateUserProfile(c *gin.Context) {
 // decodeProfileUpdate strictly decodes and validates the profile update body.
 // Writes the appropriate 4xx response and returns ok=false on any failure.
 //
-// References userValidator declared in auth_handlers.go (same package).
+// Uses the package-wide validate instance (declared in truckController.go).
+// Strict decoding (unknown-field + trailing-garbage rejection) is delegated to
+// decodeStrict so the mass-assignment defense lives in one place.
 func decodeProfileUpdate(c *gin.Context) (models.UserProfileUpdate, bool) {
 	var update models.UserProfileUpdate
-
-	dec := json.NewDecoder(c.Request.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&update); err != nil {
-		// Includes "json: unknown field" for rejected payloads.
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+	if !decodeStrict(c, &update) {
 		return update, false
 	}
-	// Reject trailing garbage / multiple JSON documents in the body.
-	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return update, false
-	}
-
-	if err := userValidator.Struct(update); err != nil {
+	if err := validate.Struct(update); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed"})
 		return update, false
 	}
@@ -185,10 +165,6 @@ func buildProfileSetDoc(u models.UserProfileUpdate) bson.M {
 // DeleteUser removes the authenticated user's account.
 func DeleteUser(c *gin.Context) {
 	userID := c.GetString("userID")
-	if userID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	ctx, cancel := dbCtx(c)
 	defer cancel()

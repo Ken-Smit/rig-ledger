@@ -13,19 +13,10 @@ import (
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/models"
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
-
-// loadValidator is the package-scoped validator instance for the Load surface.
-// Reused across every Load handler so the reflection cache is built once.
-var loadValidator *validator.Validate
-
-func init() {
-	loadValidator = validator.New()
-}
 
 // ----- helpers ---------------------------------------------------------------
 
@@ -214,16 +205,12 @@ func parseLocalDateRange(dateStr, tzStr string) (time.Time, time.Time, string) {
 func CreateLoad(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	var req models.LoadCreateRequest
 	if !decodeStrict(c, &req) {
 		return
 	}
-	if err := loadValidator.Struct(&req); err != nil {
+	if err := validate.Struct(&req); err != nil {
 		badRequest(c, err, "Invalid load data")
 		return
 	}
@@ -300,10 +287,6 @@ func CreateLoad(c *gin.Context) {
 //	?page=N&page_size=M                    pagination
 func ListLoads(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	page, size, err := parsePagination(c)
 	if err != nil {
@@ -384,10 +367,6 @@ func ListLoads(c *gin.Context) {
 // GetLoad returns a single load inside the caller's fleet (owner-tier).
 func GetLoad(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -426,10 +405,6 @@ func GetLoad(c *gin.Context) {
 func UpdateLoad(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -441,7 +416,7 @@ func UpdateLoad(c *gin.Context) {
 	if !decodeStrict(c, &req) {
 		return
 	}
-	if err := loadValidator.Struct(&req); err != nil {
+	if err := validate.Struct(&req); err != nil {
 		badRequest(c, err, "Invalid load data")
 		return
 	}
@@ -549,10 +524,6 @@ func UpdateLoad(c *gin.Context) {
 // when a previously-visible load disappears.
 func DeleteLoad(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -590,10 +561,6 @@ func DeleteLoad(c *gin.Context) {
 func ListMyLoads(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	page, size, err := parsePagination(c)
 	if err != nil {
@@ -662,10 +629,6 @@ func ListMyLoads(c *gin.Context) {
 func GetMyLoad(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -716,10 +679,6 @@ func TransitionLoad(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
 	role := c.GetString("role")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -731,7 +690,7 @@ func TransitionLoad(c *gin.Context) {
 	if !decodeStrict(c, &req) {
 		return
 	}
-	if err := loadValidator.Struct(&req); err != nil {
+	if err := validate.Struct(&req); err != nil {
 		badRequest(c, err, "Invalid status")
 		return
 	}

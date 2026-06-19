@@ -47,6 +47,15 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// A valid token must carry both a subject and a fleet. A blank in
+		// either is a malformed or forged token: reject here so every
+		// downstream handler can trust these keys without re-checking.
+		if userID == "" || fleetID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
 		// Downstream handlers and the RequireOwner gate read these three keys
 		// directly from the context. Setting all three here means no handler
 		// has to redecode the token or hit the DB just to authorize.

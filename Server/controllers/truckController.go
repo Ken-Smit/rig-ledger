@@ -15,13 +15,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-var truckValidator *validator.Validate
+// validate is the single package-wide validator instance, shared by every
+// controller (user, truck, load, invite, mileage). One instance means the
+// reflection cache is built once and all custom rules register in one place.
+// Safe for concurrent use per validator/v10.
+var validate *validator.Validate
 
 func init() {
-	truckValidator = validator.New()
+	validate = validator.New()
 	// Init-time misregistration is a programmer bug, not a runtime condition.
 	// Panic so a degraded validator never silently accepts arbitrary year values.
-	if err := truckValidator.RegisterValidation("truckyear", models.ValidateTruckYear); err != nil {
+	if err := validate.RegisterValidation("truckyear", models.ValidateTruckYear); err != nil {
 		panic(fmt.Sprintf("failed to register truckyear validator: %v", err))
 	}
 }
@@ -33,10 +37,6 @@ func init() {
 // indistinguishable from a truly nonexistent truck (no existence-oracle leak).
 func GetTruck(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -69,10 +69,6 @@ func GetTruck(c *gin.Context) {
 // Total count exposed via X-Total-Count for paged-UI wiring.
 func GetUserTrucks(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	page, size, err := parsePagination(c)
 	if err != nil {
@@ -126,10 +122,6 @@ func GetUserTrucks(c *gin.Context) {
 func CreateTruck(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	var truck models.Truck
 	if err := c.ShouldBindJSON(&truck); err != nil {
@@ -143,7 +135,7 @@ func CreateTruck(c *gin.Context) {
 	truck.UserID = userID
 	truck.FleetID = fleetID
 
-	if err := truckValidator.Struct(truck); err != nil {
+	if err := validate.Struct(truck); err != nil {
 		badRequest(c, err, "Invalid truck data")
 		return
 	}
@@ -176,10 +168,6 @@ func CreateTruck(c *gin.Context) {
 // new auth-scoped fields are added.)
 func UpdateTruck(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
@@ -200,7 +188,7 @@ func UpdateTruck(c *gin.Context) {
 
 	// Only validate Year if provided — it must not exceed next year.
 	if updateData.Year != 0 {
-		if err := truckValidator.StructPartial(updateData, "Year"); err != nil {
+		if err := validate.StructPartial(updateData, "Year"); err != nil {
 			badRequest(c, err, "Invalid truck data")
 			return
 		}
@@ -230,10 +218,6 @@ func UpdateTruck(c *gin.Context) {
 // DeleteTruck removes a truck from the caller's fleet.
 func DeleteTruck(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
