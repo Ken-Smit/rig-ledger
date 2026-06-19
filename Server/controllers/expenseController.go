@@ -21,10 +21,6 @@ import (
 // up paged UI without a breaking response shape change.
 func GetExpenses(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	page, size, err := parsePagination(c)
 	if err != nil {
@@ -80,10 +76,6 @@ func GetExpenses(c *gin.Context) {
 func CreateExpense(c *gin.Context) {
 	userID := c.GetString("userID")
 	fleetID := c.GetString("fleetID")
-	if userID == "" || fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	var expense models.Expense
 	if err := c.ShouldBindJSON(&expense); err != nil {
@@ -155,10 +147,6 @@ func assertTruckInFleet(ctx context.Context, truckID bson.ObjectID, fleetID stri
 // against another fleet's expense ID matches zero documents and returns 404.
 func DeleteExpense(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {

@@ -41,15 +41,6 @@ func appBaseURL() string {
 	return strings.TrimRight(base, "/")
 }
 
-// userValidator validates user-facing request DTOs (UserProfileUpdate, etc.).
-// Reused per validator/v10 best practice — instances cache reflection metadata
-// and are safe for concurrent use.
-//
-// Lives in auth_handlers.go because both Register and Login depend on it for
-// DTO validation; user_handlers.go (same package) references it directly from
-// decodeProfileUpdate.
-var userValidator = validator.New()
-
 // bcryptCost is the work factor used for password hashing. CLAUDE.md mandates a
 // minimum of 12; 14 is chosen for stronger resistance to offline cracking and
 // must not be lowered without a documented reason.
@@ -174,7 +165,7 @@ func Register(c *gin.Context) {
 		badRequest(c, err, "Please check your registration details and try again")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, registrationErrorMessage(err))
 		return
 	}
@@ -312,7 +303,7 @@ func Login(c *gin.Context) {
 		badRequest(c, err, "Invalid login payload")
 		return
 	}
-	if err := userValidator.Struct(loginDetails); err != nil {
+	if err := validate.Struct(loginDetails); err != nil {
 		badRequest(c, err, "Invalid login payload")
 		return
 	}
@@ -405,7 +396,7 @@ func RegisterDriver(c *gin.Context) {
 		badRequest(c, err, "Please check your registration details and try again")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, registrationErrorMessage(err))
 		return
 	}
@@ -652,7 +643,7 @@ func VerifyEmail(c *gin.Context) {
 		badRequest(c, err, "This verification link is invalid or has expired.")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, "This verification link is invalid or has expired.")
 		return
 	}
@@ -696,7 +687,7 @@ func ResendVerification(c *gin.Context) {
 		badRequest(c, err, "Please enter a valid email address")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, "Please enter a valid email address")
 		return
 	}
@@ -754,7 +745,7 @@ func ForgotPassword(c *gin.Context) {
 		badRequest(c, err, "Please enter a valid email address")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, "Please enter a valid email address")
 		return
 	}
@@ -816,7 +807,7 @@ func ResetPassword(c *gin.Context) {
 		badRequest(c, err, "This reset link is invalid or has expired.")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		// A short password is the most likely validation failure here; surface
 		// the actionable policy message rather than a generic one.
 		badRequest(c, err, registrationErrorMessage(err))

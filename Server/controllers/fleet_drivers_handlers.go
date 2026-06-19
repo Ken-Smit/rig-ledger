@@ -34,10 +34,6 @@ type fleetDriverDoc struct {
 // before pagination becomes useful.
 func ListFleetDrivers(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	ctx, cancel := dbCtx(c)
 	defer cancel()

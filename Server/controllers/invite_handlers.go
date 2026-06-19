@@ -39,17 +39,13 @@ type inviteListing struct {
 func CreateInvite(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
 	userID := c.GetString("userID")
-	if fleetID == "" || userID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	var req models.InviteCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, err, "Invalid invite request")
 		return
 	}
-	if err := userValidator.Struct(req); err != nil {
+	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, "Please provide a valid email address")
 		return
 	}
@@ -96,10 +92,6 @@ func CreateInvite(c *gin.Context) {
 // attack surface for nothing.
 func GetInvites(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	ctx, cancel := dbCtx(c)
 	defer cancel()
@@ -142,10 +134,6 @@ func GetInvites(c *gin.Context) {
 // the truck/expense delete paths.
 func DeleteInvite(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
-	if fleetID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	objID, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
