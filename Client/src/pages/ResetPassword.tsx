@@ -43,59 +43,60 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-bracket-tl" />
-        <div className="login-bracket-br" />
-
-        <div className="login-header">
-          <div className="login-logo-mark">⬡</div>
-          <h1 className="login-logo-title">Rig Ledger</h1>
-          <p className="login-logo-sub">Set New Password</p>
+    <div className="authwrap">
+      <div className="authcard">
+        <div className="brand">
+          <span className="mark">⬡</span>
+          <span className="word">
+            Rig<span className="cy">Ledger</span>
+          </span>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="field-group">
-            <label className="field-label">New Password</label>
-            <input
-              className="field-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              minLength={12}
-              required
-            />
-            <small className="field-hint">Must be at least 12 characters.</small>
+        <section className="panel">
+          <h1>Set New Password</h1>
+          <div className="sub">
+            Choose a new password to finish resetting your account.
           </div>
 
-          <div className="field-group">
-            <label className="field-label">Confirm Password</label>
-            <input
-              className="field-input"
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••"
-              minLength={12}
-              required
-            />
-          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="field">
+              <label>New Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                minLength={12}
+                required
+              />
+            </div>
 
-          {error && <div className="login-error">{error}</div>}
+            <div className="field">
+              <label>Confirm Password</label>
+              <input
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                minLength={12}
+                required
+              />
+            </div>
 
-          <button
-            className="btn-primary login-submit"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? 'Resetting...' : 'Reset Password'}
-          </button>
+            {error && <div className="err">{error}</div>}
 
-          <Link to="/login" className="btn-ghost login-submit">
-            Back to Sign In
-          </Link>
-        </form>
+            <button className="btn primary" type="submit" disabled={loading}>
+              {loading ? 'Resetting...' : 'Reset Password'}
+            </button>
+
+            <div className="foot">
+              Password must be at least 12 characters.
+            </div>
+            <div className="foot">
+              <Link to="/login">Back to sign in</Link>
+            </div>
+          </form>
+        </section>
       </div>
     </div>
   )

@@ -9,10 +9,10 @@ import type {
   LoadCreateData,
   LoadStatus,
   LoadUpdateData,
+  Stop,
 } from '../types/load'
 import type { Truck } from '../types/truck'
-import Navbar from '../components/Navbar'
-import LoadCard from '../components/LoadCard'
+import { AppShell } from '../components/AppShell'
 import LoadFormModal from '../components/LoadFormModal'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -23,11 +23,48 @@ const STATUS_FILTERS: { value: '' | LoadStatus; label: string }[] = [
   { value: 'complete', label: 'Complete' },
 ]
 
+// Visual status vocabulary: pending is in-flight work (warn), in_progress is
+// active/good (ok), complete is settled/neutral (plain chip).
+const STATUS_CHIP: Record<LoadStatus, string> = {
+  pending: 'chip warn',
+  in_progress: 'chip ok',
+  complete: 'chip',
+}
+
+const STATUS_LABEL: Record<LoadStatus, string> = {
+  pending: 'Pending',
+  in_progress: 'In Progress',
+  complete: 'Complete',
+}
+
+const usd = (cents: number | undefined): string =>
+  cents == null ? '—' : '$' + Math.round(cents / 100).toLocaleString()
+
+const miles = (m: number | undefined): string =>
+  m == null ? '—' : m.toLocaleString() + ' mi'
+
+// laneFor renders a stop list as a "first → last" lane summary, falling back to
+// the reference number when no stops are present.
+const laneFor = (stops: Stop[]): { lane: string; sub: string } => {
+  if (stops.length === 0) return { lane: 'No stops', sub: '' }
+  const ordered = [...stops].sort((a, b) => a.sequence - b.sequence)
+  const fmt = (s: Stop): string => {
+    if (s.city && s.state) return `${s.city}, ${s.state}`
+    if (s.city) return s.city
+    return s.address || s.state || '—'
+  }
+  const first = ordered[0]
+  const last = ordered[ordered.length - 1]
+  const lane = ordered.length === 1 ? fmt(first) : `${fmt(first)} → ${fmt(last)}`
+  const sub = `${ordered.length} stop${ordered.length !== 1 ? 's' : ''}`
+  return { lane, sub }
+}
+
 // Loads is the owner-facing page: list + filter + CRUD. Drivers are routed to
 // MyLoads instead via App.tsx role gating.
 export default function Loads() {
   const navigate = useNavigate()
-  const { logout, user } = useAuth()
+  const { user } = useAuth()
 
   const [loads, setLoads] = useState<Load[]>([])
   const [drivers, setDrivers] = useState<FleetDriver[]>([])
@@ -37,11 +74,6 @@ export default function Loads() {
   const [statusFilter, setStatusFilter] = useState<'' | LoadStatus>('')
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<Load | null>(null)
-
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login')
-  }
 
   // loadAll fetches loads + drivers + trucks in parallel. Drivers and trucks
   // populate the assign-driver / truck dropdowns inside the modal.
@@ -133,76 +165,95 @@ export default function Loads() {
   }, [loads])
 
   return (
-    <>
-      <div className="dashboard-page">
-        <Navbar onLogout={handleLogout} />
-
-        <main className="dashboard-main">
-          <div className="fleet-header">
-            <div>
-              <h2 className="section-title">Loads</h2>
-              <p className="section-sub">
-                {loads.length} load{loads.length !== 1 ? 's' : ''}
-              </p>
+    <AppShell>
+      <main>
+        <div className="pagehead">
+          <div>
+            <div className="kicker">Dispatch</div>
+            <h1>Loads</h1>
+            <div className="sub">
+              {loads.length} load{loads.length !== 1 ? 's' : ''} — assign a driver,
+              leave it unassigned, or run it yourself.
             </div>
+          </div>
+          <button className="addbtn" onClick={() => setShowAdd(true)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            New load
+          </button>
+        </div>
+
+        <div className="tabs" style={{ marginBottom: 18 }}>
+          {STATUS_FILTERS.map((f) => (
             <button
-              className="btn-primary"
-              onClick={() => setShowAdd(true)}
+              key={f.value}
+              className={statusFilter === f.value ? 'on' : ''}
+              onClick={() => setStatusFilter(f.value)}
             >
-              + New Load
+              {f.label}
             </button>
+          ))}
+        </div>
+
+        {error && <div className="alert-error">{error}</div>}
+
+        {loading ? (
+          <div className="loading-state">
+            <div className="loading-spinner" />
+            <p>Loading...</p>
           </div>
-
-          <div
-            className="modal-row"
-            style={{ marginBottom: 16, maxWidth: 480 }}
-          >
-            <div className="field-group" style={{ flex: 1 }}>
-              <label className="field-label">Status</label>
-              <select
-                className="field-select"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as '' | LoadStatus)}
-              >
-                {STATUS_FILTERS.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        ) : loads.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">⬡</div>
+            <p>No loads yet</p>
+            <p className="text-dim">
+              Create your first load — assign a driver, leave it unassigned, or drive it yourself
+            </p>
           </div>
-
-          {error && <div className="alert-error">{error}</div>}
-
-          {loading ? (
-            <div className="loading-state">
-              <div className="loading-spinner" />
-              <p>Loading...</p>
-            </div>
-          ) : loads.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">⬡</div>
-              <p>No loads yet</p>
-              <p className="text-dim">
-                Create your first load — assign a driver, leave it unassigned, or drive it yourself
-              </p>
-            </div>
-          ) : (
-            grouped.map(([dateLabel, list]) => (
-              <div key={dateLabel} style={{ marginBottom: 24 }}>
-                <h3 className="section-title" style={{ fontSize: 14, marginBottom: 8 }}>
-                  {dateLabel}
-                </h3>
-                <div className="truck-grid">
-                  {list.map((l) => (
-                    <LoadCard
-                      key={l._id}
-                      load={l}
-                      driverLabel={driverLabelFor(l.driver_id)}
-                      truckLabel={truckLabelFor(l.truck_id)}
-                      actions={
-                        <>
+        ) : (
+          grouped.map(([dateLabel, list]) => (
+            <section className="panel" key={dateLabel}>
+              <h2>
+                {dateLabel}
+                <span className="note num">
+                  {list.length} load{list.length !== 1 ? 's' : ''}
+                </span>
+              </h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lane</th>
+                    <th>Reference</th>
+                    <th>Driver</th>
+                    <th>Truck</th>
+                    <th className="r">Miles</th>
+                    <th className="r">Rate</th>
+                    <th className="r">Status</th>
+                    <th className="r">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((l) => {
+                    const { lane, sub } = laneFor(l.stops)
+                    const truckLabel = truckLabelFor(l.truck_id)
+                    return (
+                      <tr key={l._id}>
+                        <td className="lane">
+                          {lane}
+                          {sub && <small>{sub}</small>}
+                        </td>
+                        <td className="num">{l.reference_number || '—'}</td>
+                        <td className="tk">{driverLabelFor(l.driver_id)}</td>
+                        <td className="num">{truckLabel ?? '—'}</td>
+                        <td className="r num">{miles(l.distance_miles)}</td>
+                        <td className="r num">{usd(l.rate_cents)}</td>
+                        <td className="r">
+                          <span className={STATUS_CHIP[l.status]}>
+                            {STATUS_LABEL[l.status]}
+                          </span>
+                        </td>
+                        <td className="r">
                           <button
                             className="btn-ghost btn-sm"
                             onClick={() => setEditing(l)}
@@ -215,16 +266,16 @@ export default function Loads() {
                           >
                             Delete
                           </button>
-                        </>
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </main>
-      </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </section>
+          ))
+        )}
+      </main>
 
       {showAdd && (
         <LoadFormModal
@@ -244,6 +295,6 @@ export default function Loads() {
           onClose={() => setEditing(null)}
         />
       )}
-    </>
+    </AppShell>
   )
 }

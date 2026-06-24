@@ -34,6 +34,35 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     headers:
+      # Security headers for every document served by the SPA host. CSP scopes
+      # the SPA to its own origin: it may only talk to the API origin
+      # (connect-src), inline styles are allowed (Vite/Tailwind emit them),
+      # scripts must be same-origin, and the app can never be framed.
+      # connect-src must match the origin the SPA actually calls — VITE_API_URL
+      # below (https://api.rig-ledger.com). The onrender host is kept as a
+      # fallback during the custom-domain migration; drop it once migration is
+      # complete.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; connect-src 'self' https://api.rig-ledger.com https://rig-ledgerapi.onrender.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # Hashed build assets (Vite emits content-hashed filenames under /assets)
+      # are immutable: a content change yields a new filename, so they can be
+      # cached forever. Listed before the /* no-cache rule; Render applies the
+      # most specific matching path.
+      - path: /assets/*
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
+      # index.html (and anything not under /assets) must never be cached, or
+      # users get stale HTML pointing at deleted asset hashes after a deploy.
       - path: /*
         name: Cache-Control
         value: no-cache

@@ -124,8 +124,7 @@ func CreateTruck(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
 
 	var truck models.Truck
-	if err := c.ShouldBindJSON(&truck); err != nil {
-		badRequest(c, err, "Invalid truck data")
+	if !decodeStrict(c, &truck) {
 		return
 	}
 
@@ -144,7 +143,35 @@ func CreateTruck(c *gin.Context) {
 	defer cancel()
 	truckCollection := database.GetTruckCollection()
 
-	_, err := truckCollection.InsertOne(ctx, truck)
+	// Plan gate: a fleet may only register as many trucks as its subscription
+	// tier allows (free-trial limit when unsubscribed). Enforced server-side so
+	// the band cannot be bypassed by a crafted request.
+	fleet, err := loadFleet(ctx, fleetID)
+	if err != nil {
+		log.Printf("CreateTruck: load fleet failed fleet=%s: %v", fleetID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create truck"})
+		return
+	}
+	count, err := truckCollection.CountDocuments(ctx, bson.M{"fleet_id": fleetID})
+	if err != nil {
+		log.Printf("CreateTruck: count failed fleet=%s: %v", fleetID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create truck"})
+		return
+	}
+	if limit := fleetTruckLimit(fleet.SubscriptionStatus, fleet.SubscriptionTier, fleet.PromoBonusTrucks > 0); count >= int64(limit) {
+		msg := "Start your 7-day free trial to add trucks."
+		if limit > 0 {
+			suffix := ""
+			if limit != 1 {
+				suffix = "s"
+			}
+			msg = fmt.Sprintf("Your plan covers up to %d truck%s. Upgrade to add more.", limit, suffix)
+		}
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": msg})
+		return
+	}
+
+	_, err = truckCollection.InsertOne(ctx, truck)
 	if err != nil {
 		log.Printf("CreateTruck: insert failed fleet=%s user=%s: %v", fleetID, userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create truck"})

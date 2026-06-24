@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log"
@@ -351,7 +352,7 @@ func Login(c *gin.Context) {
 	}
 
 	// 4. Generate access token (15 min) and refresh token (24 hours).
-	accessToken, err := utils.GenerateAccessToken(foundUser.ID.Hex(), foundUser.Role, foundUser.FleetID)
+	accessToken, err := utils.GenerateAccessToken(foundUser.ID.Hex(), foundUser.Role, foundUser.FleetID, fleetEntitled(ctx, foundUser.FleetID))
 	if err != nil {
 		log.Printf("Login: access token generation failed user=%s: %v", foundUser.ID.Hex(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
@@ -481,7 +482,7 @@ func RegisterDriver(c *gin.Context) {
 
 	// 5. Issue tokens. Token-generation failure post-insert is also a rollback
 	// trigger — we do not want a half-onboarded driver who cannot log in.
-	accessToken, err := utils.GenerateAccessToken(user.ID.Hex(), user.Role, user.FleetID)
+	accessToken, err := utils.GenerateAccessToken(user.ID.Hex(), user.Role, user.FleetID, fleetEntitled(ctx, user.FleetID))
 	if err != nil {
 		log.Printf("RegisterDriver: access token generation failed user=%s: %v", user.ID.Hex(), err)
 		if _, delErr := userCollection.DeleteOne(ctx, bson.M{"_id": user.ID}); delErr != nil {
@@ -568,8 +569,39 @@ func RefreshAccessToken(c *gin.Context) {
 		return
 	}
 
-	if user.RefreshToken != refreshTokenStr {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token has been revoked"})
+	// Compare the presented refresh token against the stored one in constant
+	// time. A plain `!=` leaks, via its early-exit byte-by-byte comparison, how
+	// many leading bytes of a guess match the secret — a timing side-channel on
+	// a secret-equality check. subtle.ConstantTimeCompare always scans both
+	// operands fully. It also returns 0 (mismatch) when the lengths differ,
+	// which correctly fails an empty stored token (e.g. after logout/reset).
+	if subtle.ConstantTimeCompare([]byte(user.RefreshToken), []byte(refreshTokenStr)) != 1 {
+		// REUSE / COMPROMISE SIGNAL: the JWT signature is valid (it passed
+		// ValidateRefreshToken above, so it was minted by us for this user) yet
+		// its value does not match the one currently stored. In a single-token
+		// model the only stored token is the most recently rotated one, so a
+		// signature-valid mismatch means either (a) an older, already-rotated
+		// token is being replayed — the classic refresh-token reuse attack where
+		// an attacker who rotated first would otherwise silently take over while
+		// the victim is merely logged out — or (b) a legit client raced two
+		// refreshes / restored a stale cookie. We cannot distinguish the two
+		// without per-session jti tracking (out of scope), so we treat every
+		// mismatch as hostile and wipe the user's stored refresh token. This
+		// invalidates the whole token family: BOTH the attacker's and the
+		// victim's next refresh fail, forcing a full password-backed re-login
+		// that an attacker (without the password) cannot complete.
+		//
+		// TRADE-OFF: a legitimate user who races refreshes or replays a stale
+		// cookie is also forced to re-login. Acceptable for a single-token model
+		// and far safer than leaving a possibly-hijacked session alive.
+		//
+		// persistRefreshToken with an empty value reuses the existing update
+		// path (no parallel Mongo write); a failed wipe is logged, not fatal —
+		// the request still 401s, so no session is handed out either way.
+		persistRefreshToken(ctx, userCollection, objID, "")
+		// SECURITY: never log the token values — only the user and the event.
+		log.Printf("RefreshAccessToken: refresh-token reuse/mismatch for user=%s — wiping token family, forcing re-login", userID)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Your session has expired. Please sign in again."})
 		return
 	}
 
@@ -580,7 +612,7 @@ func RefreshAccessToken(c *gin.Context) {
 	}
 
 	// Generate new access token with the user's current role/fleet.
-	newAccessToken, err := utils.GenerateAccessToken(userID, user.Role, user.FleetID)
+	newAccessToken, err := utils.GenerateAccessToken(userID, user.Role, user.FleetID, fleetEntitled(ctx, user.FleetID))
 	if err != nil {
 		log.Printf("RefreshAccessToken: access token generation failed user=%s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { getTrucks } from '../api/trucks'
 import { getMileageLogs } from '../api/mileage'
 import { getMyLoads, transitionLoad } from '../api/loads'
@@ -7,7 +7,7 @@ import type { Truck } from '../types/truck'
 import type { MileageLog } from '../types/mileage'
 import type { DriverLoad } from '../types/load'
 import { LOAD_STATUS_IN_PROGRESS, LOAD_STATUS_PENDING } from '../types/load'
-import Navbar from '../components/Navbar'
+import { AppShell } from '../components/AppShell'
 import LoadCard from '../components/LoadCard'
 import { MileageLogModal } from '../components/MileageLogModal'
 import { useAuth } from '../auth/AuthProvider'
@@ -37,8 +37,7 @@ function browserTz(): string {
 }
 
 export default function DriverDashboard() {
-  const navigate = useNavigate()
-  const { logout, user } = useAuth()
+  const { user } = useAuth()
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [logs, setLogs] = useState<MileageLog[]>([])
   const [todaysLoads, setTodaysLoads] = useState<DriverLoad[]>([])
@@ -46,11 +45,6 @@ export default function DriverDashboard() {
   const [error, setError] = useState('')
   const [modalTruck, setModalTruck] = useState<Truck | null>(null)
   const [transitioningId, setTransitioningId] = useState<string | null>(null)
-
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login')
-  }
 
   // loadAll fetches trucks first, then mileage logs per truck. Drivers see
   // every truck in their fleet, so this is fleet-wide by virtue of the
@@ -214,6 +208,18 @@ export default function DriverDashboard() {
     }
   }, [todaysActiveLoads, truckLabel])
 
+  // mostRecentLog is this driver's newest mileage entry — surfaced in the
+  // "your truck" band so the latest reading is the first thing they see.
+  const mostRecentLog = useMemo(() => recent[0], [recent])
+
+  // bandUnit names the rig for the band: today's assigned truck wins,
+  // otherwise fall back to the truck on the latest mileage log.
+  const bandUnit = useMemo(() => {
+    if (todaysTruck) return todaysTruck.label
+    if (mostRecentLog) return truckLabel(mostRecentLog.truck_id)
+    return null
+  }, [todaysTruck, mostRecentLog, truckLabel])
+
   const greeting = user ? `Welcome, ${user.first_name}` : 'Welcome'
   const todayDisplay = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -223,163 +229,172 @@ export default function DriverDashboard() {
   })
 
   return (
-    <>
-      <div className="dashboard-page">
-        <Navbar onLogout={handleLogout} />
-
-        <main className="dashboard-main">
-          <div className="fleet-header">
-            <div>
-              <h2 className="section-title">Driver Dashboard</h2>
-              <p className="section-sub">{todayDisplay} — {greeting}</p>
-            </div>
+    <AppShell>
+      <main>
+        <div className="pagehead">
+          <div>
+            <div className="kicker">Driver</div>
+            <h1>Today on the road</h1>
+            <div className="sub">{todayDisplay} — {greeting}</div>
           </div>
+          <div className="headside">
+            <span className="scope">{todayDisplay}</span>
+            <Link to="/my-loads" className="btn-ghost btn-sm">View All Loads</Link>
+          </div>
+        </div>
 
-          {error && <div className="alert-error">{error}</div>}
+        {error && <div className="alert-error">{error}</div>}
 
-          {loading ? (
-            <div className="loading-state">
-              <div className="loading-spinner" />
-              <p>Loading...</p>
-            </div>
-          ) : (
-            <>
-              <div style={{ marginBottom: 24 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    marginBottom: 8,
-                  }}
-                >
-                  <h3 className="section-title" style={{ fontSize: 14 }}>
-                    Today's Work{' '}
-                    <span className="text-dim" style={{ fontSize: 12 }}>
-                      ({todaysActiveLoads.length})
-                    </span>
-                  </h3>
-                  <Link to="/my-loads" className="btn-ghost btn-sm">
-                    View All
-                  </Link>
+        {loading ? (
+          <div className="loading-state">
+            <div className="loading-spinner" />
+            <p>Loading...</p>
+          </div>
+        ) : (
+          <>
+            <div className="mystrip">
+              <span className="tag">
+                Your truck · {bandUnit ?? 'Unassigned'}
+              </span>
+              <div className="m">
+                <div className="k">Today's truck</div>
+                <div className="v">{todaysTruck ? todaysTruck.label : '—'}</div>
+              </div>
+              <div className="m">
+                <div className="k">Today's loads</div>
+                <div className="v">{String(todaysActiveLoads.length).padStart(2, '0')}</div>
+              </div>
+              <div className="m">
+                <div className="k">Last logged</div>
+                <div className="v">{mostRecentLog ? fmt(mostRecentLog.date) : '—'}</div>
+              </div>
+              <div className="m">
+                <div className="k">Latest odometer</div>
+                <div className="v">
+                  {mostRecentLog?.end_mileage != null
+                    ? mostRecentLog.end_mileage.toLocaleString()
+                    : '—'}
                 </div>
-                {todaysActiveLoads.length === 0 ? (
-                  <p className="text-dim" style={{ fontSize: 12 }}>
-                    No loads scheduled for today.
+              </div>
+            </div>
+
+            <div className="kpis">
+              <div className="kpi hero-k">
+                <div className="k">Today's loads</div>
+                <div className="v num">{String(todaysActiveLoads.length).padStart(2, '0')}</div>
+                <div className="d num">Scheduled or in progress</div>
+              </div>
+              <div className="kpi">
+                <div className="k">Units in fleet</div>
+                <div className="v num">{trucks.length}</div>
+                <div className="d num" style={{ color: 'var(--muted)' }}>On record</div>
+              </div>
+              <div className="kpi">
+                <div className="k">Logs this week</div>
+                <div className="v num">{recent.length}</div>
+                <div className="d num" style={{ color: 'var(--muted)' }}>Last 7 days</div>
+              </div>
+              <div className="kpi">
+                <div className="k">Today's truck</div>
+                <div className="v num">{todaysTruck ? todaysTruck.label : '—'}</div>
+                <div className="d num" style={{ color: 'var(--muted)' }}>
+                  {todaysTruck
+                    ? todaysTruck.extra > 0
+                      ? `+${todaysTruck.extra} other unit${todaysTruck.extra > 1 ? 's' : ''} today`
+                      : 'Assigned for today'
+                    : 'No truck assigned'}
+                </div>
+              </div>
+            </div>
+
+            <section className="panel">
+              <h2>
+                Today's Work
+                <span className="note">{todaysActiveLoads.length} active</span>
+              </h2>
+              {todaysActiveLoads.length === 0 ? (
+                <p className="text-dim" style={{ fontSize: 13 }}>
+                  No loads scheduled for today.
+                </p>
+              ) : (
+                <div className="truck-grid">
+                  {todaysActiveLoads.map(l => (
+                    <LoadCard
+                      key={l._id}
+                      load={l}
+                      truckLabel={truckLabel(l.truck_id ?? '')}
+                      actions={renderLoadActions(l)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <div className="grid2">
+              <section className="panel">
+                <h2>Units</h2>
+                {trucks.length === 0 ? (
+                  <p className="text-dim" style={{ fontSize: 13 }}>
+                    No units registered.
                   </p>
                 ) : (
-                  <div className="truck-grid">
-                    {todaysActiveLoads.map(l => (
-                      <LoadCard
-                        key={l._id}
-                        load={l}
-                        truckLabel={truckLabel(l.truck_id ?? '')}
-                        actions={renderLoadActions(l)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="stats-row db-stats-row">
-                <div className="stat-card">
-                  <div className="stat-label">Today's Truck</div>
-                  <div className="stat-value text-cyan">
-                    {todaysTruck ? todaysTruck.label : '—'}
-                  </div>
-                  <div className="stat-sub">
-                    {todaysTruck
-                      ? todaysTruck.extra > 0
-                        ? `+${todaysTruck.extra} other unit${todaysTruck.extra > 1 ? 's' : ''} today`
-                        : 'Assigned for today'
-                      : 'No truck assigned'}
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="stat-label">Today's Loads</div>
-                  <div className="stat-value text-cyan">
-                    {String(todaysActiveLoads.length).padStart(2, '0')}
-                  </div>
-                  <div className="stat-sub">Scheduled Or In Progress</div>
-                </div>
-              </div>
-
-              <div className="db-columns">
-                <div className="db-panel">
-                  <div className="db-panel-title">Units</div>
-                  {trucks.length === 0 ? (
-                    <p
-                      className="text-dim"
-                      style={{ padding: '16px 0', fontSize: 12 }}
-                    >
-                      No units registered.
-                    </p>
-                  ) : (
-                    <div className="db-activity">
-                      {trucks.map(t => {
-                        const last = lastLoggedFor(t._id)
-                        return (
-                          <div key={t._id} className="db-unit-row">
-                            <div className="db-unit-row-text">
-                              <span className="db-act-unit">
-                                {unitLabelFor(t)}
-                              </span>
-                              <span className="db-act-date text-dim">
-                                {last ? `Last logged ${fmt(last.date)}` : 'No logs yet'}
-                              </span>
-                            </div>
-                            <button
-                              className="btn-primary btn-sm"
-                              onClick={() => setModalTruck(t)}
-                            >
-                              Log Mileage
-                            </button>
+                  trucks.map(t => {
+                    const last = lastLoggedFor(t._id)
+                    return (
+                      <div className="svc" key={t._id}>
+                        <div className="row1">
+                          <div className="nm">
+                            {unitLabelFor(t)}
+                            <small>
+                              {last ? `Last logged ${fmt(last.date)}` : 'No logs yet'}
+                            </small>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="db-panel">
-                  <div className="db-panel-title">
-                    Recent Activity <span className="text-dim">— Last 7 Days</span>
-                  </div>
-                  {recent.length === 0 ? (
-                    <p
-                      className="text-dim"
-                      style={{ padding: '16px 0', fontSize: 12 }}
-                    >
-                      No mileage logs in the last seven days.
-                    </p>
-                  ) : (
-                    <div className="db-activity">
-                      {recent.map(l => (
-                        <div key={l._id} className="db-activity-row">
-                          <span className="db-act-date">{fmt(l.date)}</span>
-                          <span className="db-act-unit">
-                            {truckLabel(l.truck_id)}
-                          </span>
-                          <span className="db-act-amount text-cyan">
-                            {l.start_mileage != null
-                              ? `${l.start_mileage.toLocaleString()}`
-                              : '—'}
-                            {' → '}
-                            {l.end_mileage != null
-                              ? `${l.end_mileage.toLocaleString()}`
-                              : '—'}
-                          </span>
+                          <button
+                            className="btn-primary btn-sm"
+                            onClick={() => setModalTruck(t)}
+                          >
+                            Log Mileage
+                          </button>
                         </div>
-                      ))}
+                      </div>
+                    )
+                  })
+                )}
+              </section>
+
+              <section className="panel">
+                <h2>
+                  Recent Activity
+                  <span className="note">Last 7 days</span>
+                </h2>
+                {recent.length === 0 ? (
+                  <p className="text-dim" style={{ fontSize: 13 }}>
+                    No mileage logs in the last seven days.
+                  </p>
+                ) : (
+                  recent.map(l => (
+                    <div className="maint-row" key={l._id}>
+                      <span className="dot ok" />
+                      <span className="lbl">
+                        {fmt(l.date)} · {truckLabel(l.truck_id)}
+                      </span>
+                      <span className="mi">
+                        {l.start_mileage != null
+                          ? l.start_mileage.toLocaleString()
+                          : '—'}
+                        {' → '}
+                        {l.end_mileage != null
+                          ? l.end_mileage.toLocaleString()
+                          : '—'}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </main>
-      </div>
+                  ))
+                )}
+              </section>
+            </div>
+          </>
+        )}
+      </main>
 
       {modalTruck && (
         <MileageLogModal
@@ -390,6 +405,6 @@ export default function DriverDashboard() {
           onSaved={handleSaved}
         />
       )}
-    </>
+    </AppShell>
   )
 }

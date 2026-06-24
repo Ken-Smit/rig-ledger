@@ -42,3 +42,42 @@ func RequireOwner() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// RequireEntitled gates a route to fleets with an active subscription.
+//
+// Contract: must run AFTER JWTAuthMiddleware, which sets "entitled" on the
+// context from the access token's claim. Entitlement is fleet-level — a driver
+// inherits it from the owner's subscription via the shared fleet, so an invited
+// driver has full access exactly when the owner is paying, and loses it when the
+// owner lapses. The claim is re-evaluated on every token refresh (<=15 min), so
+// a started/cancelled subscription propagates to the whole fleet within one
+// refresh cycle.
+//
+// Returns 402 Payment Required (not 403): the block is about billing state, not
+// permission, and the SPA keys on 402 to route the user to the billing page.
+// The message is role-aware so a driver is told to ask their owner rather than
+// shown a "subscribe" call-to-action they cannot act on.
+//
+// SECURITY: fail-safe. A token minted before this release (or any malformed
+// claim) decodes to entitled=false, so the gate blocks rather than grants.
+func RequireEntitled() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetString("userID") == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
+		if !c.GetBool("entitled") {
+			msg := "This fleet needs an active subscription. Ask your fleet owner to subscribe."
+			if c.GetString("role") == models.RoleOwner {
+				msg = "Start your free trial or subscribe to continue."
+			}
+			c.JSON(http.StatusPaymentRequired, gin.H{"error": msg})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}

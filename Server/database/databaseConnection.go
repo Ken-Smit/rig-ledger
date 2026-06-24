@@ -84,7 +84,25 @@ func ensureIndexes(ctx context.Context) error {
 	if err := ensureMileageLogIndexes(ctx); err != nil {
 		return err
 	}
-	return ensureLoadIndexes(ctx)
+	if err := ensureLoadIndexes(ctx); err != nil {
+		return err
+	}
+	return ensureIftaIndexes(ctx)
+}
+
+// ensureIftaIndexes covers the fleet-scoped, quarter-ranged reads on both IFTA
+// collections. (fleet_id, date) serves the per-quarter list + return queries.
+func ensureIftaIndexes(ctx context.Context) error {
+	models := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "fleet_id", Value: 1}, {Key: "date", Value: 1}},
+			Options: options.Index().SetName("fleet_id_date"),
+		},
+	}
+	if err := createIndexes(ctx, GetIftaMilesCollection(), models); err != nil {
+		return err
+	}
+	return createIndexes(ctx, GetIftaFuelCollection(), models)
 }
 
 // ensureUserIndexes creates the unique email index. Server-side uniqueness is
@@ -299,6 +317,16 @@ func GetMileageLogCollection() *mongo.Collection {
 // GetLoadCollection returns the loads collection.
 func GetLoadCollection() *mongo.Collection {
 	return client.Database("rigledger").Collection("loads")
+}
+
+// GetIftaMilesCollection returns the ifta_miles collection (trip segments).
+func GetIftaMilesCollection() *mongo.Collection {
+	return client.Database("rigledger").Collection("ifta_miles")
+}
+
+// GetIftaFuelCollection returns the ifta_fuel collection (fuel purchases).
+func GetIftaFuelCollection() *mongo.Collection {
+	return client.Database("rigledger").Collection("ifta_fuel")
 }
 
 // Disconnect closes the MongoDB connection.

@@ -41,41 +41,40 @@ export default function VerifyEmail() {
   }, [token])
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-bracket-tl" />
-        <div className="login-bracket-br" />
-
-        <div className="login-header">
-          <div className="login-logo-mark">⬡</div>
-          <h1 className="login-logo-title">Rig Ledger</h1>
-          <p className="login-logo-sub">Email Verification</p>
+    <div className="authwrap">
+      <div className="authcard">
+        <div className="brand">
+          <span className="mark">⬡</span>
+          <span className="word">
+            Rig<span className="cy">Ledger</span>
+          </span>
         </div>
 
-        {status === 'verifying' && (
-          <div className="loading-state">
-            <div className="loading-spinner" />
-            <p>Verifying your email...</p>
+        <section className="panel">
+          <h1>Email Verification</h1>
+          <div className="sub">
+            {status === 'verifying'
+              ? 'Confirming your email address, one moment.'
+              : status === 'success'
+                ? 'Your email is confirmed.'
+                : 'We could not verify this link.'}
           </div>
-        )}
 
-        {status === 'success' && (
-          <>
-            <p style={{ textAlign: 'center' }}>{message}</p>
-            <Link to="/login" className="btn-primary login-submit">
-              Go to Sign In
-            </Link>
-          </>
-        )}
+          {status === 'error' && <div className="err">{message}</div>}
+          {status === 'success' && <div className="ok">{message}</div>}
 
-        {status === 'error' && (
-          <>
-            <div className="login-error">{message}</div>
-            <Link to="/login" className="btn-ghost login-submit">
-              Back to Sign In
-            </Link>
-          </>
-        )}
+          {status === 'success' && (
+            <div className="foot">
+              <Link to="/login">Go to sign in</Link>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="foot">
+              <Link to="/login">Back to sign in</Link>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

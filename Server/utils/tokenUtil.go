@@ -53,11 +53,12 @@ const (
 // JWT claim keys. Hoisted to constants to keep keyfunc/issuance/parsing in
 // lockstep — a typo in any one site silently invalidates every token.
 const (
-	claimUserID  = "userID"
-	claimRole    = "role"
-	claimFleetID = "fleetID"
-	claimType    = "type"
-	claimExp     = "exp"
+	claimUserID   = "userID"
+	claimRole     = "role"
+	claimFleetID  = "fleetID"
+	claimEntitled = "entitled"
+	claimType     = "type"
+	claimExp      = "exp"
 )
 
 // Token type discriminator values. The "type" claim guards against using a
@@ -73,16 +74,21 @@ func getSecret() string {
 
 // GenerateAccessToken creates a short-lived (15 min) JWT for API authorization.
 //
-// The role and fleetID claims are embedded so the auth middleware and the
-// RequireOwner gate can authorize without a per-request user lookup. Both
-// values are taken from the persisted user record — never from client input.
-func GenerateAccessToken(userID, role, fleetID string) (string, error) {
+// The role, fleetID, and entitled claims are embedded so the auth middleware,
+// RequireOwner, and RequireEntitled gates can authorize without a per-request
+// DB lookup. All values are taken from server-side state (the persisted user +
+// the fleet's subscription status) — never from client input. `entitled`
+// reflects the fleet's subscription at mint time and is re-evaluated on every
+// refresh (≤15 min staleness), so a lapsed/started subscription takes effect on
+// the next refresh cycle for the whole fleet (owner + invited drivers).
+func GenerateAccessToken(userID, role, fleetID string, entitled bool) (string, error) {
 	claims := jwt.MapClaims{
-		claimUserID:  userID,
-		claimRole:    role,
-		claimFleetID: fleetID,
-		claimType:    tokenTypeAccess,
-		claimExp:     time.Now().Add(accessTokenTTL).Unix(),
+		claimUserID:   userID,
+		claimRole:     role,
+		claimFleetID:  fleetID,
+		claimEntitled: entitled,
+		claimType:     tokenTypeAccess,
+		claimExp:      time.Now().Add(accessTokenTTL).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -111,19 +117,19 @@ func GenerateRefreshToken(userID string) (string, error) {
 // the client. A missing role/fleetID claim on a token issued before this
 // release is treated as invalid; users will be forced through a fresh login,
 // which is the safe default after an auth-shape change.
-func ValidateAccessToken(tokenString string) (userID, role, fleetID string, err error) {
+func ValidateAccessToken(tokenString string) (userID, role, fleetID string, entitled bool, err error) {
 	claims, err := validateTokenClaims(tokenString, tokenTypeAccess)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", false, err
 	}
 
 	userID, ok := claims[claimUserID].(string)
 	if !ok || userID == "" {
-		return "", "", "", fmt.Errorf("invalid userID claim")
+		return "", "", "", false, fmt.Errorf("invalid userID claim")
 	}
 	role, ok = claims[claimRole].(string)
 	if !ok || role == "" {
-		return "", "", "", fmt.Errorf("invalid role claim")
+		return "", "", "", false, fmt.Errorf("invalid role claim")
 	}
 	// fleetID may be empty for an owner whose fleet creation has not yet
 	// completed (transient state during registration), so we accept the
@@ -131,14 +137,19 @@ func ValidateAccessToken(tokenString string) (userID, role, fleetID string, err 
 	// to defend against a malformed token.
 	fleetIDClaim, ok := claims[claimFleetID]
 	if !ok {
-		return "", "", "", fmt.Errorf("missing fleetID claim")
+		return "", "", "", false, fmt.Errorf("missing fleetID claim")
 	}
 	fleetID, ok = fleetIDClaim.(string)
 	if !ok {
-		return "", "", "", fmt.Errorf("invalid fleetID claim")
+		return "", "", "", false, fmt.Errorf("invalid fleetID claim")
 	}
 
-	return userID, role, fleetID, nil
+	// entitled is fail-safe: a missing or malformed claim (e.g. a token minted
+	// before this release) is treated as NOT entitled, so the gate errs toward
+	// blocking rather than granting access.
+	entitled, _ = claims[claimEntitled].(bool)
+
+	return userID, role, fleetID, entitled, nil
 }
 
 // ValidateRefreshToken validates a refresh token and returns the userID.

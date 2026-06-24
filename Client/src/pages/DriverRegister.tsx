@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { lookupInvite } from '../api/invites'
 import type { InviteLookup } from '../types/invite'
 import { useAuth } from '../auth/AuthProvider'
-import { useTheme } from '../hooks/useTheme'
 
 type LookupState =
   | { kind: 'loading' }
@@ -13,7 +12,6 @@ type LookupState =
 export default function DriverRegister() {
   const { token } = useParams<{ token: string }>()
   const navigate = useNavigate()
-  const { theme, toggle } = useTheme()
   const { loginAsDriver } = useAuth()
 
   const [lookup, setLookup] = useState<LookupState>({ kind: 'loading' })
@@ -76,153 +74,120 @@ export default function DriverRegister() {
   }
 
   return (
-    <div className="login-page">
-      <div
-        style={{
-          position: 'absolute',
-          top: '1.5rem',
-          right: '1.5rem',
-          display: 'flex',
-          gap: '0.5rem',
-        }}
-      >
-        <button
-          className="btn-ghost btn-sm"
-          onClick={() => navigate('/home')}
-          title="Back to Home"
-        >
-          ⬡ Home
-        </button>
-        <button
-          className="btn-ghost btn-sm nav-theme-toggle"
-          onClick={toggle}
-          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          {theme === 'dark' ? '☀' : '☾'}
-        </button>
-      </div>
-
-      <div className="login-card">
-        <div className="login-bracket-tl" />
-        <div className="login-bracket-br" />
-
-        <div className="login-header">
-          <div className="login-logo-mark">⬡</div>
-          <h1 className="login-logo-title">Rig Ledger</h1>
-          <p className="login-logo-sub">Driver onboarding</p>
+    <div className="authwrap">
+      <div className="authcard">
+        <div className="brand">
+          <span className="mark">⬡</span>
+          <span className="word">
+            Rig<span className="cy">Ledger</span>
+          </span>
         </div>
 
-        {lookup.kind === 'loading' && (
-          <div className="loading-state">
-            <div className="loading-spinner" />
-            <p>Verifying your invite...</p>
-          </div>
-        )}
+        <section className="panel">
+          {lookup.kind === 'loading' && (
+            <>
+              <h1>Verifying Invite</h1>
+              <div className="sub">Checking your invite link, one moment.</div>
+            </>
+          )}
 
-        {lookup.kind === 'invalid' && (
-          <>
-            <div className="login-error">
-              This invite is invalid or has expired.
-            </div>
-            <div className="modal-actions" style={{ marginTop: 16 }}>
+          {lookup.kind === 'invalid' && (
+            <>
+              <h1>Invite Not Valid</h1>
+              <div className="sub">
+                This invite is invalid or has expired.
+              </div>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn primary"
                 onClick={() => navigate('/home')}
               >
                 Back to Home
               </button>
-            </div>
-          </>
-        )}
+            </>
+          )}
 
-        {lookup.kind === 'ok' && (
-          <>
-            <p
-              className="section-sub"
-              style={{ textAlign: 'center', marginBottom: 16 }}
-            >
-              You've been invited to join {lookup.data.fleet_name}.
-            </p>
+          {lookup.kind === 'ok' && (
+            <>
+              <h1>Join {lookup.data.fleet_name}</h1>
+              <div className="sub">
+                You've been invited to join the team. Create your account to
+                get started.
+              </div>
 
-            <form onSubmit={handleSubmit} className="login-form">
-              <div className="login-field-row">
-                <div className="field-group">
-                  <label className="field-label">First Name</label>
+              {error && <div className="err">{error}</div>}
+
+              <form onSubmit={handleSubmit}>
+                <div className="two">
+                  <div className="field">
+                    <label>First Name</label>
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={e => setFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Last Name</label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={e => setLastName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Email</label>
                   <input
-                    className="field-input"
-                    type="text"
-                    value={firstName}
-                    onChange={e => setFirstName(e.target.value)}
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    // If the owner pre-bound the invite to an email, the
+                    // server will reject mismatches. Keeping the field
+                    // editable preserves UX for invites issued without an
+                    // email constraint.
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    minLength={12}
                     required
                   />
                 </div>
-                <div className="field-group">
-                  <label className="field-label">Last Name</label>
+
+                <div className="field">
+                  <label>Confirm Password</label>
                   <input
-                    className="field-input"
-                    type="text"
-                    value={lastName}
-                    onChange={e => setLastName(e.target.value)}
+                    type="password"
+                    value={passwordConfirm}
+                    onChange={e => setPasswordConfirm(e.target.value)}
+                    minLength={12}
                     required
                   />
                 </div>
-              </div>
 
-              <div className="field-group">
-                <label className="field-label">Email</label>
-                <input
-                  className="field-input"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  // If the owner pre-bound the invite to an email, the
-                  // server will reject mismatches. Keeping the field
-                  // editable preserves UX for invites issued without an
-                  // email constraint.
-                />
-              </div>
+                <button
+                  className="btn primary"
+                  type="submit"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Creating Account...' : 'Create Account'}
+                </button>
+              </form>
 
-              <div className="field-group">
-                <label className="field-label">Password</label>
-                <input
-                  className="field-input"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  minLength={12}
-                  required
-                />
-                <small className="field-hint">
-                  Must be at least 12 characters.
-                </small>
-              </div>
-
-              <div className="field-group">
-                <label className="field-label">Confirm Password</label>
-                <input
-                  className="field-input"
-                  type="password"
-                  value={passwordConfirm}
-                  onChange={e => setPasswordConfirm(e.target.value)}
-                  minLength={12}
-                  required
-                />
-              </div>
-
-              {error && <div className="login-error">{error}</div>}
-
-              <button
-                className="btn-primary login-submit"
-                type="submit"
-                disabled={submitting}
-              >
-                {submitting ? 'Creating Account...' : 'Create Account'}
-              </button>
-            </form>
-          </>
-        )}
+              <div className="foot">Must be at least 12 characters.</div>
+            </>
+          )}
+        </section>
       </div>
     </div>
   )

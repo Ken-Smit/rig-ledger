@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/Ken-Smit/RigLedgerServer/models"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
@@ -162,13 +164,23 @@ func buildProfileSetDoc(u models.UserProfileUpdate) bson.M {
 	return set
 }
 
-// DeleteUser removes the authenticated user's account.
+// DeleteUser removes the authenticated user's account with role-aware cleanup
+// so deletion never orphans fleet data.
+//
+//   - Owner: blocked while a subscription is active/trialing or while other
+//     members remain in the fleet (the owner must cancel + remove drivers
+//     first — an explicit teardown for an irreversible, financially-relevant
+//     action). Once clear, the fleet and EVERY fleet-scoped collection are
+//     cascaded, then the user.
+//   - Driver: their loads are unassigned (driver_id cleared; non-complete
+//     loads reset to pending so the owner can reassign), then the user.
+//
+// SECURITY: every write is scoped to the caller's own fleet_id / user_id from
+// the JWT context — a deletion can never reach another tenant's data.
 func DeleteUser(c *gin.Context) {
 	userID := c.GetString("userID")
-
-	ctx, cancel := dbCtx(c)
-	defer cancel()
-	userCollection := database.GetUserCollection()
+	fleetID := c.GetString("fleetID")
+	role := c.GetString("role")
 
 	objID, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
@@ -176,12 +188,90 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	_, err = userCollection.DeleteOne(ctx, bson.M{"_id": objID})
-	if err != nil {
+	ctx, cancel := dbCtx(c)
+	defer cancel()
+
+	if role == models.RoleOwner {
+		if ok := teardownOwnerFleet(c, ctx, objID, fleetID); !ok {
+			return // teardownOwnerFleet already wrote the response
+		}
+	} else {
+		// Driver: unassign their loads so none point at a deleted user.
+		// Completed loads keep their historical driver_id for the record.
+		_, err = database.GetLoadCollection().UpdateMany(ctx,
+			bson.M{"fleet_id": fleetID, "driver_id": userID, "status": bson.M{"$ne": models.LoadStatusComplete}},
+			bson.M{"$set": bson.M{"driver_id": "", "status": models.LoadStatusPending}},
+		)
+		if err != nil {
+			log.Printf("DeleteUser: unassign loads failed user=%s fleet=%s: %v", userID, fleetID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+			return
+		}
+	}
+
+	if _, err = database.GetUserCollection().DeleteOne(ctx, bson.M{"_id": objID}); err != nil {
 		log.Printf("DeleteUser: delete failed user=%s: %v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Account deleted"})
+}
+
+// teardownOwnerFleet validates an owner can be deleted and, if so, cascades the
+// fleet + all fleet-scoped collections. Returns false (and writes the HTTP
+// response) when deletion is blocked or a cascade step fails; true when the
+// fleet has been fully torn down and the caller may delete the user.
+func teardownOwnerFleet(c *gin.Context, ctx context.Context, ownerObjID bson.ObjectID, fleetID string) bool {
+	fleet, err := loadFleet(ctx, fleetID)
+	if err != nil {
+		log.Printf("DeleteUser: load fleet failed fleet=%s: %v", fleetID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+		return false
+	}
+
+	// Block while billing is live so a paid subscription is never left dangling.
+	if entitledStatuses[fleet.SubscriptionStatus] {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cancel your subscription before deleting your account."})
+		return false
+	}
+
+	// Block while other members remain — deleting the owner would orphan them.
+	others, err := database.GetUserCollection().CountDocuments(ctx,
+		bson.M{"fleet_id": fleetID, "_id": bson.M{"$ne": ownerObjID}})
+	if err != nil {
+		log.Printf("DeleteUser: member count failed fleet=%s: %v", fleetID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+		return false
+	}
+	if others > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Remove all drivers from your fleet before deleting your account."})
+		return false
+	}
+
+	// Cascade every fleet-scoped collection. Done before the user delete so a
+	// failure here leaves the account intact and the operation safely retriable.
+	fleetFilter := bson.M{"fleet_id": fleetID}
+	cascade := []*mongo.Collection{
+		database.GetTruckCollection(),
+		database.GetExpenseCollection(),
+		database.GetLoadCollection(),
+		database.GetInviteCollection(),
+		database.GetMileageLogCollection(),
+		database.GetIftaMilesCollection(),
+		database.GetIftaFuelCollection(),
+	}
+	for _, col := range cascade {
+		if _, err := col.DeleteMany(ctx, fleetFilter); err != nil {
+			log.Printf("DeleteUser: cascade delete failed fleet=%s col=%s: %v", fleetID, col.Name(), err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+			return false
+		}
+	}
+	if _, err := database.GetFleetCollection().DeleteOne(ctx, bson.M{"_id": fleet.ID}); err != nil {
+		log.Printf("DeleteUser: fleet delete failed fleet=%s: %v", fleetID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+		return false
+	}
+	return true
 }

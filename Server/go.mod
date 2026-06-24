@@ -3,11 +3,13 @@ module github.com/Ken-Smit/RigLedgerServer
 go 1.25.0
 
 require (
+	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
+	github.com/stripe/stripe-go/v82 v82.5.1
 	github.com/ulule/limiter/v3 v3.11.2
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.48.0
@@ -18,7 +20,6 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect

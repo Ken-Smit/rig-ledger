@@ -32,6 +32,13 @@ func SetupRoutes(router *gin.Engine) {
 			authGroup.POST("/reset-password", controllers.ResetPassword)
 		}
 
+		// Stripe webhook — unauthenticated by design (Stripe calls it directly)
+		// and deliberately NOT rate-limited: throttling would drop legitimate
+		// retried events and desync subscription state. Authenticity is enforced
+		// inside the handler via Stripe signature verification against the raw
+		// request body, which is strictly stronger than any IP throttle here.
+		api.POST("/billing/webhook", controllers.HandleStripeWebhook)
+
 		// Invite lookup is unauthenticated by design: the recipient is not yet
 		// a Rig Ledger user when they click the invite link. Rate-limited under
 		// the same policy as the auth surface to throttle token-guessing.

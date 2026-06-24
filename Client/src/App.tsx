@@ -19,6 +19,10 @@ const Invites = lazy(() => import('./pages/Invites'))
 const DriverRegister = lazy(() => import('./pages/DriverRegister'))
 const Loads = lazy(() => import('./pages/Loads'))
 const MyLoads = lazy(() => import('./pages/MyLoads'))
+const Receipts = lazy(() => import('./pages/Receipts'))
+const Demo = lazy(() => import('./pages/Demo'))
+const Billing = lazy(() => import('./pages/Billing'))
+const Ifta = lazy(() => import('./pages/Ifta'))
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -72,6 +76,7 @@ export default function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/home" element={<Home />} />
+          <Route path="/demo" element={<Demo />} />
           <Route path="/login" element={<Login />} />
           <Route
             path="/register/driver/:token"
@@ -111,6 +116,32 @@ export default function App() {
             element={
               <PrivateRoute>
                 <TruckDetail />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/receipts"
+            element={
+              <PrivateRoute>
+                <Receipts />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/ifta"
+            element={
+              <PrivateRoute>
+                <Ifta />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <PrivateRoute>
+                <RoleRoute role="owner">
+                  <Billing />
+                </RoleRoute>
               </PrivateRoute>
             }
           />

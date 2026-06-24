@@ -12,6 +12,13 @@ const (
 	headerNoSniff        = "nosniff"
 	headerFrameDeny      = "DENY"
 	headerReferrerPolicy = "strict-origin-when-cross-origin"
+
+	// headerCSP locks down the API. This service only ever returns JSON — it
+	// renders no HTML, loads no scripts, and must never be framed. A maximally
+	// restrictive policy ("default-src 'none'", "frame-ancestors 'none'")
+	// neutralizes clickjacking and any reflected-content vector at no cost to
+	// a JSON API. The SPA host carries its own (looser) policy in render.yaml.
+	headerCSP = "default-src 'none'; frame-ancestors 'none'"
 	// HSTS: 2 years, include subdomains, ready for the preload list.
 	// Only emitted in release mode — see SecurityHeaders.
 	headerHSTSValue = "max-age=63072000; includeSubDomains; preload"
@@ -39,6 +46,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", headerNoSniff)
 		c.Header("X-Frame-Options", headerFrameDeny)
 		c.Header("Referrer-Policy", headerReferrerPolicy)
+		c.Header("Content-Security-Policy", headerCSP)
 		if releaseMode {
 			c.Header("Strict-Transport-Security", headerHSTSValue)
 		}

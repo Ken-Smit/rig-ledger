@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Ken-Smit/RigLedgerServer/controllers"
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/middleware"
 	"github.com/Ken-Smit/RigLedgerServer/routes"
@@ -24,8 +25,22 @@ const (
 	envPort               = "PORT"
 	envResendAPIKey       = "RESEND_API_KEY"
 	envEmailFrom          = "EMAIL_FROM"
+	envStripeSecret        = "STRIPE_SECRET_KEY"
+	envStripeWebhookSecret = "STRIPE_WEBHOOK_SECRET"
 	envGinMode            = "GIN_MODE"
 	ginReleaseMode        = "release"
+
+	// minJWTSecretLen is the minimum acceptable JWT_SECRET length. HS256 is an
+	// HMAC over a 256-bit key; a shorter secret weakens the signature and
+	// invites brute force. 32 bytes = 256 bits.
+	minJWTSecretLen = 32
+
+	// maxMultipartMemory caps the in-memory buffer Gin uses when parsing
+	// multipart uploads. Set to the receipt ceiling (10 MB, mirrors
+	// controllers.maxReceiptBytes) so a large receipt is parsed without a
+	// surprise allocation and anything larger is rejected by MaxBytesReader
+	// in the handler before it is buffered.
+	maxMultipartMemory = 10 << 20
 
 	// startupMigrationTimeout caps how long we'll spend backfilling legacy
 	// users into the new role/fleet model before failing startup. Mirrors the
@@ -41,6 +56,11 @@ func main() {
 
 	if os.Getenv(envJWTSecret) == "" {
 		log.Fatal("JWT_SECRET environment variable not set")
+	}
+	// HS256 needs a >=256-bit key. Reject a too-short secret at boot rather
+	// than silently signing tokens with a weak key.
+	if len(os.Getenv(envJWTSecret)) < minJWTSecretLen {
+		log.Fatalf("JWT_SECRET must be at least %d characters (256-bit key for HS256)", minJWTSecretLen)
 	}
 
 	mongoURI := os.Getenv(envMongoURI)
@@ -60,6 +80,19 @@ func main() {
 		}
 	}
 
+	// Billing: require Stripe config in production so a release build can never
+	// silently run without the webhook that drives entitlement. In dev, billing
+	// endpoints degrade to a friendly 503 when unset.
+	if os.Getenv(envGinMode) == ginReleaseMode {
+		if os.Getenv(envStripeSecret) == "" {
+			log.Fatal("STRIPE_SECRET_KEY environment variable not set in release mode")
+		}
+		if os.Getenv(envStripeWebhookSecret) == "" {
+			log.Fatal("STRIPE_WEBHOOK_SECRET environment variable not set in release mode")
+		}
+	}
+	controllers.InitStripe()
+
 	database.Connect(mongoURI)
 
 	// Backfill legacy users into the role/fleet model. Idempotent — re-runs
@@ -75,6 +108,11 @@ func main() {
 
 	router := gin.Default()
 	configureTrustedProxies(router)
+
+	// Cap the multipart parser's in-memory buffer at the receipt size limit.
+	// The scan handler additionally wraps the body in http.MaxBytesReader so a
+	// payload larger than this is rejected before it is fully buffered.
+	router.MaxMultipartMemory = maxMultipartMemory
 
 	// Security headers FIRST so they land on every response, including
 	// the 400 emitted by RequireHTTPS and the 429 emitted by the rate limiter.

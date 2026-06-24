@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listInvites, createInvite, deleteInvite } from '../api/invites'
 import type { Invite, InviteCreateResponse } from '../types/invite'
-import Navbar from '../components/Navbar'
-import { useAuth } from '../auth/AuthProvider'
+import { AppShell } from '../components/AppShell'
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -21,7 +20,6 @@ function statusOf(inv: Invite): 'Consumed' | 'Pending' {
 
 export default function Invites() {
   const navigate = useNavigate()
-  const { logout } = useAuth()
 
   const [invites, setInvites] = useState<Invite[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,11 +52,6 @@ export default function Invites() {
   useEffect(() => {
     void fetchInvites()
   }, [fetchInvites])
-
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login')
-  }
 
   const shareUrl = (token: string): string =>
     `${window.location.origin}/register/driver/${token}`
@@ -104,32 +97,27 @@ export default function Invites() {
   }
 
   return (
-    <div className="dashboard-page">
-      <Navbar onLogout={handleLogout} />
-
-      <main className="dashboard-main">
-        <div className="fleet-header">
+    <AppShell>
+      <main>
+        <div className="pagehead">
           <div>
-            <h2 className="section-title">Team Invites</h2>
-            <p className="section-sub">
+            <div className="kicker">Drivers</div>
+            <h1>Invites</h1>
+            <div className="sub">
               Send drivers a one-time link to join your fleet.
-            </p>
+            </div>
           </div>
         </div>
 
         {error && <div className="alert-error">{error}</div>}
 
-        <div className="db-panel">
-          <div className="db-panel-title">Create Invite</div>
-          <form
-            className="modal-form"
-            onSubmit={handleCreate}
-            style={{ paddingTop: 8 }}
-          >
-            <div className="field-group">
-              <label className="field-label">Driver Email (Optional)</label>
+        <section className="panel">
+          <h2>Create Invite</h2>
+          <form onSubmit={handleCreate}>
+            <div className="field">
+              <label htmlFor="invite-email">Driver Email (Optional)</label>
               <input
-                className="field-input"
+                id="invite-email"
                 type="email"
                 value={emailInput}
                 onChange={e => setEmailInput(e.target.value)}
@@ -140,12 +128,8 @@ export default function Invites() {
               </small>
             </div>
 
-            <div className="modal-actions">
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={creating}
-              >
+            <div className="actions" style={{ display: 'flex' }}>
+              <button type="submit" className="btn" disabled={creating}>
                 {creating ? 'Creating...' : 'Create Invite'}
               </button>
             </div>
@@ -154,13 +138,29 @@ export default function Invites() {
           {fresh && (
             <div className="alert-error" style={{ marginTop: 16 }}>
               <strong>Save this link now — it won't be shown again.</strong>
-              <div style={{ marginTop: 8, wordBreak: 'break-all' }}>
-                {shareUrl(fresh.token)}
+              <div className="field" style={{ marginTop: 12 }}>
+                <div className="ctrl">
+                  <code
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: '11px 8px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 13,
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {shareUrl(fresh.token)}
+                  </code>
+                </div>
               </div>
-              <div className="modal-actions" style={{ marginTop: 12 }}>
+              <div
+                className="actions"
+                style={{ display: 'flex', gap: 10, marginTop: 12 }}
+              >
                 <button
                   type="button"
-                  className="btn-ghost btn-sm"
+                  className="btn ghost"
                   onClick={() => {
                     setFresh(null)
                     setCopyMsg('')
@@ -168,25 +168,26 @@ export default function Invites() {
                 >
                   Dismiss
                 </button>
-                <button
-                  type="button"
-                  className="btn-primary btn-sm"
-                  onClick={handleCopy}
-                >
+                <button type="button" className="btn" onClick={handleCopy}>
                   Copy Link
                 </button>
               </div>
               {copyMsg && (
-                <p className="text-dim" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 8 }}>
                   {copyMsg}
                 </p>
               )}
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="db-panel">
-          <div className="db-panel-title">All Invites</div>
+        <section className="panel">
+          <h2>
+            All Invites
+            <span className="note num">
+              {invites.length} invite{invites.length !== 1 ? 's' : ''}
+            </span>
+          </h2>
 
           {loading ? (
             <div className="loading-state">
@@ -194,46 +195,55 @@ export default function Invites() {
               <p>Loading...</p>
             </div>
           ) : invites.length === 0 ? (
-            <p className="text-dim" style={{ padding: '16px 0', fontSize: 12 }}>
-              No invites yet.
-            </p>
+            <div className="empty-state">
+              <div className="empty-icon">⬡</div>
+              <p>No invites yet</p>
+              <p className="text-dim">
+                Create your first invite to give a driver a one-time join link
+              </p>
+            </div>
           ) : (
-            <table className="db-table">
+            <table>
               <thead>
                 <tr>
                   <th>Email</th>
+                  <th>Created</th>
                   <th>Expires</th>
-                  <th>Status</th>
-                  <th />
+                  <th className="r">Status</th>
+                  <th className="r">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {invites.map(inv => (
-                  <tr key={inv._id}>
-                    <td>{inv.email ?? 'No email'}</td>
-                    <td>{fmtDateTime(inv.expires_at)}</td>
-                    <td
-                      className={
-                        statusOf(inv) === 'Consumed' ? 'text-green' : 'text-amber'
-                      }
-                    >
-                      {statusOf(inv)}
-                    </td>
-                    <td className="db-col-right">
-                      <button
-                        className="btn-danger btn-sm"
-                        onClick={() => handleDelete(inv._id)}
-                      >
-                        ✕ Revoke
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {invites.map(inv => {
+                  const status = statusOf(inv)
+                  return (
+                    <tr key={inv._id}>
+                      <td>{inv.email ?? 'No email'}</td>
+                      <td className="num">{fmtDateTime(inv.created_at)}</td>
+                      <td className="num">{fmtDateTime(inv.expires_at)}</td>
+                      <td className="r">
+                        <span
+                          className={status === 'Consumed' ? 'chip ok' : 'chip warn'}
+                        >
+                          {status}
+                        </span>
+                      </td>
+                      <td className="r">
+                        <button
+                          className="btn-danger btn-sm"
+                          onClick={() => handleDelete(inv._id)}
+                        >
+                          Revoke
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
-        </div>
+        </section>
       </main>
-    </div>
+    </AppShell>
   )
 }

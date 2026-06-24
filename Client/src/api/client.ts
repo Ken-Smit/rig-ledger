@@ -65,6 +65,18 @@ client.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as RetryableConfig | undefined
 
+    // 402 = the fleet has no active subscription (RequireEntitled) or has hit
+    // its plan's truck band. Both are resolved on the billing page, so steer
+    // the user there instead of letting the calling component render a broken
+    // state. The billing endpoints themselves are never gated, so this cannot
+    // loop. We still reject so the caller can stop its own loading state.
+    if (error.response?.status === 402) {
+      if (window.location.pathname !== '/billing') {
+        window.location.href = '/billing'
+      }
+      return Promise.reject(error)
+    }
+
     // Only attempt refresh on a real 401 from a non-auth endpoint that we
     // have not already retried. Login / refresh failures must surface to
     // the caller so the UI can show "invalid credentials" etc.
