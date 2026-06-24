@@ -103,9 +103,15 @@ client.interceptors.response.use(
       return client(original)
     } catch (refreshErr) {
       notifyAuthFailure()
-      // Avoid a redirect loop on pages that are already public.
-      const path = window.location.pathname
-      if (path !== '/login' && path !== '/home') {
+      // Don't hard-redirect to /login from a PUBLIC path. notifyAuthFailure()
+      // already flips AuthProvider to 'anon', and React Router then routes the
+      // root '/' to '/home' via PrivateRoute. Forcing /login here (the old
+      // behavior) hijacked a fresh visitor landing on rig-ledger.com/ — the
+      // boot profile probe 401s, and they'd be bounced to login instead of the
+      // marketing home. The hard redirect is only for a session that dies on a
+      // genuinely private page.
+      const PUBLIC_PATHS = ['/', '/home', '/demo', '/login']
+      if (!PUBLIC_PATHS.includes(window.location.pathname)) {
         window.location.href = '/login'
       }
       return Promise.reject(refreshErr)
