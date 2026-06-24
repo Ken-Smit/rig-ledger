@@ -2279,3 +2279,23 @@ nav.side a:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .authcard .foot a{color:var(--accent)}
 
 @media(max-width:760px){.calc{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.top3{grid-template-columns:1fr}}
+
+/* ---- phone hardening (≤600px): keep everything inside the viewport ----
+   Appended last so these rules win on cascade order over the cockpit classes. */
+@media(max-width:600px){
+  /* Safety net: no element may force the whole page to scroll sideways.
+     overflow-x:clip (NOT hidden) does not create a scroll container, so the
+     sticky mobile top bar + slide-in drawer keep working. */
+  html,body{overflow-x:clip}
+
+  /* The live tab strips use flex:1 but inherit min-width:auto, so the tabs
+     refused to shrink below their content and overran the screen. Let them
+     shrink and ease the letter-spacing so the labels still fit. */
+  .rh-chart-tab,.rh-period-tab,.exp-period-tab{min-width:0;letter-spacing:.04em}
+
+  /* Real tables scroll inside their own panel instead of stretching the page. */
+  .app table{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* Long unbroken strings (VIN, email, IDs) wrap instead of widening the row. */
+  .app{overflow-wrap:anywhere}
+}
