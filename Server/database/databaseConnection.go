@@ -87,7 +87,29 @@ func ensureIndexes(ctx context.Context) error {
 	if err := ensureLoadIndexes(ctx); err != nil {
 		return err
 	}
-	return ensureIftaIndexes(ctx)
+	if err := ensureIftaIndexes(ctx); err != nil {
+		return err
+	}
+	return ensureHosIndexes(ctx)
+}
+
+// ensureHosIndexes backs the two HOS read paths:
+//   - (driver_id, changed_at desc): the status engine + driver log listing both
+//     read one driver's logs newest-first. This is the hot path on every status
+//     fetch from a driver's phone.
+//   - (fleet_id, changed_at desc):  fleet-scoped reporting / audit reads.
+func ensureHosIndexes(ctx context.Context) error {
+	models := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "driver_id", Value: 1}, {Key: "changed_at", Value: -1}},
+			Options: options.Index().SetName("driver_id_changed_desc"),
+		},
+		{
+			Keys:    bson.D{{Key: "fleet_id", Value: 1}, {Key: "changed_at", Value: -1}},
+			Options: options.Index().SetName("fleet_id_changed_desc"),
+		},
+	}
+	return createIndexes(ctx, GetHosLogCollection(), models)
 }
 
 // ensureIftaIndexes covers the fleet-scoped, quarter-ranged reads on both IFTA
@@ -317,6 +339,11 @@ func GetMileageLogCollection() *mongo.Collection {
 // GetLoadCollection returns the loads collection.
 func GetLoadCollection() *mongo.Collection {
 	return client.Database("rigledger").Collection("loads")
+}
+
+// GetHosLogCollection returns the hos_logs collection (duty-status changes).
+func GetHosLogCollection() *mongo.Collection {
+	return client.Database("rigledger").Collection("hos_logs")
 }
 
 // GetIftaMilesCollection returns the ifta_miles collection (trip segments).

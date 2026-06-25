@@ -73,6 +73,14 @@ func SetupProtectedRoutes(router *gin.Engine) {
 			entitled.GET("/loads/mine/:id", controllers.GetMyLoad)
 			entitled.POST("/loads/:id/transition", controllers.TransitionLoad)
 
+			// Hours of Service — owner OR driver. Each user logs and reads their
+			// OWN duty status; the handlers pin driver_id == JWT subject, so this
+			// is intentionally NOT owner-gated. NOTE: a manual web app is not a
+			// certified ELD — the status response carries the mandatory disclaimer.
+			entitled.POST("/hos/logs", controllers.CreateHOSLog)
+			entitled.GET("/hos/logs", controllers.GetHOSLogs)
+			entitled.GET("/hos/status", controllers.GetHOSStatus)
+
 			// Owner-only (and entitled).
 			ownerOnly := entitled.Group("")
 			ownerOnly.Use(middleware.RequireOwner())

@@ -194,7 +194,7 @@ export default function DashboardView({ trucks, expenses, loading, error }: Prop
       ) : (
         <>
           {/* KPI grid — only values we actually compute from real data */}
-          <div className="kpis">
+          <div className="kpis exp-kpis">
             <div className="kpi hero-k">
               <div className="k">Monthly net</div>
               <div className="v num" style={{ color: monthlyNet >= 0 ? 'var(--pos)' : 'var(--neg)' }}>{money(monthlyNet)}</div>

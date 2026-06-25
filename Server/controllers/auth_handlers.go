@@ -80,17 +80,23 @@ type DriverRegisterRequest struct {
 	LastName  string `json:"last_name"  validate:"required,min=2,max=100"`
 	Email     string `json:"email"      validate:"required,email"`
 	Password  string `json:"password"   validate:"required,min=12"`
+
+	// AcceptedTerms gates driver signup the same way it gates owner Register: a
+	// driver accepting an invite must also affirmatively accept the ToS.
+	// validate:"eq=true" rejects anything but an explicit true.
+	AcceptedTerms bool `json:"accepted_terms" validate:"eq=true"`
 }
 
 // registrationFieldLabels maps RegisterRequest struct field names to the
 // human-readable labels surfaced to the client. Keep keys in sync with
 // models.RegisterRequest.
 var registrationFieldLabels = map[string]string{
-	"FirstName": "First name",
-	"LastName":  "Last name",
-	"Email":     "Email",
-	"Password":  "Password",
-	"Token":     "Invite token",
+	"FirstName":     "First name",
+	"LastName":      "Last name",
+	"Email":         "Email",
+	"Password":      "Password",
+	"Token":         "Invite token",
+	"AcceptedTerms": "Terms of Service",
 }
 
 // registrationErrorMessage translates a validator error into plain-English copy
@@ -121,6 +127,14 @@ func registrationErrorMessage(err error) string {
 			}
 		case "max":
 			msgs = append(msgs, fmt.Sprintf("%s must be no more than %s characters", label, fe.Param()))
+		case "eq":
+			// The only eq= rule today is AcceptedTerms eq=true; give a clear,
+			// actionable line rather than the generic "is invalid".
+			if fe.Field() == "AcceptedTerms" {
+				msgs = append(msgs, "You must accept the Terms of Service to create an account")
+			} else {
+				msgs = append(msgs, fmt.Sprintf("%s is invalid", label))
+			}
 		default:
 			msgs = append(msgs, fmt.Sprintf("%s is invalid", label))
 		}
@@ -218,6 +232,11 @@ func Register(c *gin.Context) {
 		VerifyTokenExp:  &verifyExp,
 		CreatedAt:       now,
 		UpdatedAt:       now,
+		// ToS consent proof — stamped server-side. The validator already
+		// guaranteed req.AcceptedTerms == true; we record WHEN (server clock)
+		// and WHICH version (server constant), never client-supplied values.
+		TermsAcceptedAt: &now,
+		TermsVersion:    models.CurrentTermsVersion,
 	}
 
 	if _, err := userCollection.InsertOne(ctx, user); err != nil {
@@ -454,6 +473,9 @@ func RegisterDriver(c *gin.Context) {
 		FleetID:   invite.FleetID,
 		CreatedAt: now,
 		UpdatedAt: now,
+		// ToS consent proof — stamped server-side, same discipline as Register.
+		TermsAcceptedAt: &now,
+		TermsVersion:    models.CurrentTermsVersion,
 	}
 
 	if _, err := userCollection.InsertOne(ctx, user); err != nil {

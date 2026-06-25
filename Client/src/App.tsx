@@ -23,9 +23,12 @@ const Receipts = lazy(() => import('./pages/Receipts'))
 const Demo = lazy(() => import('./pages/Demo'))
 const Billing = lazy(() => import('./pages/Billing'))
 const Ifta = lazy(() => import('./pages/Ifta'))
+const Hours = lazy(() => import('./pages/Hours'))
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Terms = lazy(() => import('./pages/Terms'))
+const Privacy = lazy(() => import('./pages/Privacy'))
 
 // Reuses the same spinner markup PrivateRoute uses for its auth-boot branch,
 // so users see a consistent loading state whether the wait is for AuthProvider
@@ -85,6 +88,8 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route
             path="/"
             element={
@@ -132,6 +137,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <Ifta />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/hours"
+            element={
+              <PrivateRoute>
+                <Hours />
               </PrivateRoute>
             }
           />

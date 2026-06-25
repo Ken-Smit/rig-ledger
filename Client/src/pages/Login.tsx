@@ -27,12 +27,16 @@ export default function Login() {
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regPasswordConfirm, setRegPasswordConfirm] = useState('')
+  // Explicit consent to the Terms of Service. Required to register: the submit
+  // button is disabled until checked, and handleRegister refuses unchecked.
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const switchTab = (t: Tab) => {
     setTab(t)
     setError('')
     setInfo('')
     setUnverified(false)
+    setAcceptedTerms(false)
   }
 
   const handleLogin = async (e: FormEvent) => {
@@ -81,6 +85,12 @@ export default function Login() {
       setError('Passwords do not match.')
       return
     }
+    // Belt-and-suspenders: the submit button is already disabled until the box
+    // is checked, but never trust UI state alone to gate a legal consent.
+    if (!acceptedTerms) {
+      setError('You must agree to the Terms of Service to create an account.')
+      return
+    }
     setLoading(true)
     try {
       await register({
@@ -88,6 +98,7 @@ export default function Login() {
         last_name: lastName,
         email: regEmail,
         password: regPassword,
+        accepted_terms: acceptedTerms,
       })
       setTab('login')
       setEmail(regEmail)
@@ -242,7 +253,26 @@ export default function Login() {
                 />
               </div>
 
-              <button className="btn primary" type="submit" disabled={loading}>
+              <label className="consent">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={e => setAcceptedTerms(e.target.checked)}
+                  required
+                />
+                <span>
+                  I agree to the{' '}
+                  <Link to="/terms" target="_blank" rel="noopener">
+                    Terms of Service
+                  </Link>
+                </span>
+              </label>
+
+              <button
+                className="btn primary"
+                type="submit"
+                disabled={loading || !acceptedTerms}
+              >
                 {loading ? 'Creating Account...' : 'Create Account'}
               </button>
 

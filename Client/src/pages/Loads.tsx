@@ -172,8 +172,7 @@ export default function Loads() {
             <div className="kicker">Dispatch</div>
             <h1>Loads</h1>
             <div className="sub">
-              {loads.length} load{loads.length !== 1 ? 's' : ''} — assign a driver,
-              leave it unassigned, or run it yourself.
+              {loads.length} load{loads.length !== 1 ? 's' : ''} — assign, leave open, or self-run.
             </div>
           </div>
           <button className="addbtn" onClick={() => setShowAdd(true)}>

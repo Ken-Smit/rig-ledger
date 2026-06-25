@@ -72,11 +72,17 @@ func loadFleet(ctx context.Context, fleetID string) (*models.Fleet, error) {
 // non-fatal, Stripe simply creates the customer without one. Projects email
 // only — the bcrypt hash never leaves Mongo.
 func ownerEmail(ctx context.Context, userID string) string {
+	// The JWT subject is the user's _id hex (see GenerateAccessToken call sites),
+	// not the user_id field — resolve by _id like every other user handler.
+	objID, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return ""
+	}
 	var u struct {
 		Email string `bson:"email"`
 	}
 	opts := options.FindOne().SetProjection(bson.M{"email": 1})
-	if err := database.GetUserCollection().FindOne(ctx, bson.M{"user_id": userID}, opts).Decode(&u); err != nil {
+	if err := database.GetUserCollection().FindOne(ctx, bson.M{"_id": objID}, opts).Decode(&u); err != nil {
 		return ""
 	}
 	return u.Email

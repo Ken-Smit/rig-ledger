@@ -194,7 +194,7 @@ export default function ExpensesView({ trucks, expenses, loading, error, onAdd, 
 
       {(error || actionError) && <div className="alert-error">{error || actionError}</div>}
 
-      <div className="kpis">
+      <div className="kpis exp-kpis">
         <div className="kpi hero-k">
           <div className="k">Net</div>
           <div className="v num" style={{ color: net >= 0 ? 'var(--pos)' : 'var(--neg)' }}>{money(net)}</div>

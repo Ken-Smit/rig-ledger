@@ -109,7 +109,7 @@ export default function Receipts() {
         {error && <div className="alert-error" style={{ marginBottom: 18 }}>{error}</div>}
         {noTrucks && <div className="done-note" style={{ marginBottom: 18 }}>Add a truck first — every entry is logged against a unit.</div>}
 
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="grid2">
           <section className="panel">
             <input
               ref={fileRef}

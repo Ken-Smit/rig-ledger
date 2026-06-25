@@ -23,6 +23,7 @@ const NAV: NavItem[] = [
   { to: '/my-loads', label: 'My Loads', icon: I('<path d="M3 12h6l2-4 3 8 2-4h5"/>'), driver: true },
   { to: '/receipts', label: 'Receipts', icon: I('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>') },
   { to: '/ifta', label: 'IFTA', icon: I('<path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/>') },
+  { to: '/hours', label: 'Hours of Service', icon: I('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>') },
   { to: '/invites', label: 'Invites', icon: I('<path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/>'), owner: true },
   { to: '/billing', label: 'Billing', icon: I('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>'), owner: true },
 ]

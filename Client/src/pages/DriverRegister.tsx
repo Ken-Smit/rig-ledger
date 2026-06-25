@@ -23,6 +23,7 @@ export default function DriverRegister() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   useEffect(() => {
     if (!token) {
@@ -54,6 +55,12 @@ export default function DriverRegister() {
       setError('Passwords do not match.')
       return
     }
+    // Belt-and-suspenders: the button is disabled until consent, but never trust
+    // UI state alone for a legal gate — the server also rejects accepted_terms=false.
+    if (!acceptedTerms) {
+      setError('You must accept the Terms of Service to create an account.')
+      return
+    }
     setSubmitting(true)
     try {
       await loginAsDriver({
@@ -62,6 +69,7 @@ export default function DriverRegister() {
         last_name: lastName,
         email,
         password,
+        accepted_terms: true,
       })
       navigate('/')
     } catch (err: unknown) {
@@ -175,10 +183,25 @@ export default function DriverRegister() {
                   />
                 </div>
 
+                <label className="consent">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={e => setAcceptedTerms(e.target.checked)}
+                    required
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer">
+                      Terms of Service
+                    </a>
+                  </span>
+                </label>
+
                 <button
                   className="btn primary"
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || !acceptedTerms}
                 >
                   {submitting ? 'Creating Account...' : 'Create Account'}
                 </button>

@@ -1,0 +1,17 @@
+# Air hot-reload config for the Go backend.
+# Run `air` from the Server/ directory; it rebuilds + restarts on any .go save.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/rigledger-server ."
+  bin = "./tmp/rigledger-server"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "node_modules"]
+  exclude_regex = ["_test.go"]
+  delay = 200            # ms debounce so a burst of saves triggers one rebuild
+  stop_on_error = true   # keep the last good binary running if the build fails
+  kill_delay = "1s"
+
+[misc]
+  clean_on_exit = true
