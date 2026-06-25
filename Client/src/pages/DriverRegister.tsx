@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { lookupInvite } from '../api/invites'
 import type { InviteLookup } from '../types/invite'
 import { useAuth } from '../auth/AuthProvider'
@@ -183,6 +183,9 @@ export default function DriverRegister() {
                   />
                 </div>
 
+                {/* Client-side <Link> (no target=_blank): a full /terms page
+                    load hits the SPA fallback and lands on login on the live
+                    deploy. Routing in-app renders the public /terms route. */}
                 <label className="consent">
                   <input
                     type="checkbox"
@@ -192,9 +195,7 @@ export default function DriverRegister() {
                   />
                   <span>
                     I agree to the{' '}
-                    <a href="/terms" target="_blank" rel="noopener noreferrer">
-                      Terms of Service
-                    </a>
+                    <Link to="/terms">Terms of Service</Link>
                   </span>
                 </label>
 

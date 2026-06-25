@@ -253,6 +253,10 @@ export default function Login() {
                 />
               </div>
 
+              {/* Client-side <Link> (no target=_blank): a full-page load of
+                  /terms hits the host's SPA fallback, which resolves to the
+                  login page on the live deploy. Routing in-app renders the
+                  public /terms route directly. */}
               <label className="consent">
                 <input
                   type="checkbox"
@@ -262,9 +266,7 @@ export default function Login() {
                 />
                 <span>
                   I agree to the{' '}
-                  <Link to="/terms" target="_blank" rel="noopener">
-                    Terms of Service
-                  </Link>
+                  <Link to="/terms">Terms of Service</Link>
                 </span>
               </label>
 
