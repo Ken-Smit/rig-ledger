@@ -2,7 +2,7 @@
 // undefined/null/empty entries and emitting a leading `?` (or '' when empty).
 // Shared by the list endpoints in api/ so the filter-serialization logic lives
 // in one place.
-export const buildQuery = (params: Record<string, unknown>): string => {
+export const buildQuery = (params: object): string => {
   const entries = Object.entries(params).filter(
     ([, v]) => v !== undefined && v !== null && v !== '',
   )

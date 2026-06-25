@@ -30,6 +30,7 @@ export interface RegisterDriverPayload {
   last_name: string
   email: string
   password: string
+  accepted_terms: boolean
 }
 
 export const login = async (
