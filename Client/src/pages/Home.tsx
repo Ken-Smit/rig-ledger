@@ -49,6 +49,8 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
     padding: '16px 24px',
     borderBottom: '1px solid var(--border)',
     position: 'sticky',
@@ -56,7 +58,7 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 40,
     background: 'var(--bg-2)',
   },
-  topActions: { display: 'flex', alignItems: 'center', gap: 10 },
+  topActions: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
   linkBtn: {
     background: 'none',
     border: '1px solid var(--border)',
