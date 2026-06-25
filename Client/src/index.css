@@ -945,7 +945,7 @@ button {
 .app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
 
 /* ---- sidebar ---- */
-.app aside{background:var(--surface);border-right:1px solid var(--border);padding:18px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.app aside{background:var(--surface);border-right:1px solid var(--border);padding:18px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow-y:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
 .brand .mark{font-size:22px;line-height:1;color:var(--accent);text-shadow:0 0 12px var(--cyan-glow)}
 .brand .word{font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:.22em;color:var(--fg)}
@@ -973,6 +973,11 @@ nav.side a:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 @media(max-width:760px){
   .app{grid-template-columns:1fr}
+  /* 1fr track defaults to min-width:auto, so a wide table balloons the main
+     column past the viewport and its own overflow-x:auto never engages.
+     Pinning min-width:0 lets the track stay at viewport width and the table
+     (display:block;overflow-x:auto at ≤600px) scrolls inside the panel. */
+  .app main{min-width:0}
   .mtop{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--border);padding:11px 14px}
   .mtop .burger{width:42px;height:42px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--border);border-radius:0;color:var(--fg-2);cursor:pointer}
   .mtop .burger:focus-visible{outline:none;box-shadow:var(--focus-ring)}
@@ -1301,4 +1306,9 @@ nav.side a:focus-visible{outline:none;box-shadow:var(--focus-ring)}
   /* Filter-tab rows (Loads) are inline-flex and never wrap, so they ran off
      the screen — let them flow onto a second line. */
   .tabs{display:flex;flex-wrap:wrap}
+
+  /* Demo page isn't wrapped in .app, so it misses the table-scroll + min-width
+     fixes above. Mirror them onto its shell so its P&L tables behave too. */
+  .demo-shell{min-width:0}
+  .demo-shell table{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 }

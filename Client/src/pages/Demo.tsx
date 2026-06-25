@@ -101,7 +101,7 @@ export default function Demo() {
         </div>
       </header>
 
-      <div style={styles.shell}>
+      <div className="demo-shell" style={styles.shell}>
         <div className="tabs" style={styles.tabrow}>
           <button type="button" className={tab === 'dashboard' ? 'on' : ''} onClick={() => setTab('dashboard')}>Dashboard</button>
           <button type="button" className={tab === 'pnl' ? 'on' : ''} onClick={() => setTab('pnl')}>Profit &amp; Loss</button>
