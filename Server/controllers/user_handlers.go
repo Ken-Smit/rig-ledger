@@ -173,7 +173,10 @@ func buildProfileSetDoc(u models.UserProfileUpdate) bson.M {
 //     action). Once clear, the fleet and EVERY fleet-scoped collection are
 //     cascaded, then the user.
 //   - Driver: their loads are unassigned (driver_id cleared; non-complete
-//     loads reset to pending so the owner can reassign), then the user.
+//     loads reset to pending so the owner can reassign), then the user. Their
+//     mileage and HOS logs are fleet records the owner must keep (FMCSA
+//     requires carriers to retain duty-status records), so they stay with the
+//     fleet and are removed only when the owner deletes the fleet.
 //
 // SECURITY: every write is scoped to the caller's own fleet_id / user_id from
 // the JWT context — a deletion can never reach another tenant's data.
@@ -260,6 +263,7 @@ func teardownOwnerFleet(c *gin.Context, ctx context.Context, ownerObjID bson.Obj
 		database.GetMileageLogCollection(),
 		database.GetIftaMilesCollection(),
 		database.GetIftaFuelCollection(),
+		database.GetHosLogCollection(),
 	}
 	for _, col := range cascade {
 		if _, err := col.DeleteMany(ctx, fleetFilter); err != nil {

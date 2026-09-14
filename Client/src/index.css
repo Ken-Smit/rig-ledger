@@ -1268,7 +1268,6 @@ nav.side a:focus-visible{outline:none;box-shadow:var(--focus-ring)}
    keeps long tokens (emails, citations) from forcing horizontal scroll. */
 .legalwrap{min-height:100vh;background:var(--bg);padding:32px 20px 64px;display:flex;justify-content:center}
 .legal{width:100%;max-width:720px;color:var(--fg-2);font:15px/1.7 var(--font-body);overflow-wrap:anywhere}
-.legal-notice{background:var(--accent-tint);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0;padding:12px 14px;font-size:13px;line-height:1.6;color:var(--fg-2);margin-bottom:24px}
 .legal-back{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:20px;font:600 13px var(--font-body)}
 .legal-back a{color:var(--accent);text-decoration:none}
 .legal-back a:hover{text-decoration:underline}
@@ -1277,6 +1276,9 @@ nav.side a:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .legal-sub{color:var(--muted);font-size:13px;letter-spacing:.06em;margin-bottom:8px}
 .legal h2{font-family:var(--font-display);font-size:15px;letter-spacing:.03em;color:var(--accent);margin:28px 0 8px;line-height:1.35}
 .legal p{margin-bottom:14px;max-width:68ch}
+.legal ul{list-style:disc;padding-left:22px;margin-bottom:14px;max-width:68ch}
+.legal li{margin-bottom:4px}
+.legal p a{color:var(--accent)}
 
 @media(max-width:760px){.calc{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.top3{grid-template-columns:1fr}}
 

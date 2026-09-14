@@ -8,4 +8,4 @@ package models
 // timestamp, producing tamper-proof proof of consent for legal enforceability.
 // Bump this string (date-based, YYYY-MM-DD) whenever the Terms of Service text
 // changes so re-consent flows can detect users on a stale version.
-const CurrentTermsVersion = "2026-06-24"
+const CurrentTermsVersion = "2026-09-14"

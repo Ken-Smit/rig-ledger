@@ -1,63 +1,86 @@
 import { Link } from 'react-router-dom'
+import {
+  LEGAL_CONTACT_EMAIL as CONTACT_EMAIL,
+  LEGAL_EFFECTIVE_DATE as EFFECTIVE_DATE,
+  LEGAL_GOVERNING_STATE as GOVERNING_STATE,
+} from '../utils/legal'
 
-// Placeholders ([[COMPANY_LEGAL_NAME]], [[STATE]], [[CONTACT_EMAIL]],
-// [[EFFECTIVE_DATE]]) are rendered literally — they are filled in later by
-// legal before launch. Do not invent values.
+// When this text changes, bump models.CurrentTermsVersion on the server (and
+// LEGAL_EFFECTIVE_DATE in utils/legal.ts) so each user's recorded consent maps to the exact
+// version they accepted.
+//
+// OPERATOR NOTE: Rig Ledger is currently operated by its owner as a sole
+// proprietorship. Once an LLC is formed, replace "Rig Ledger" in section 1
+// with the registered entity name and bump the version.
 //
 // CASING NOTE: Section headings follow the app's Title Case convention. The
 // all-caps blocks in "Disclaimer of Warranties" and "Limitation of Liability"
 // are intentional and preserved verbatim — under the UCC, warranty disclaimers
 // and liability limits must be "conspicuous", and all-caps is the standard
 // legal convention for that. This is NOT a UI-casing mistake; do not lowercase.
+
 export default function Terms() {
   return (
     <div className="legalwrap">
       <div className="legal">
-        <div className="legal-notice">
-          This Terms of Service is a template provided for convenience and is
-          not legal advice. Have a licensed attorney review and adapt it before
-          relying on it.
-        </div>
-
         <div className="legal-back">
           <Link to="/login">← Back to sign in</Link>
           <Link to="/home">Home</Link>
         </div>
 
         <h1>Terms of Service</h1>
-        <p className="legal-sub">Effective [[EFFECTIVE_DATE]]</p>
+        <p className="legal-sub">Effective {EFFECTIVE_DATE}</p>
 
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By creating an account or using Rig Ledger (the "Service"), operated
-          by [[COMPANY_LEGAL_NAME]] ("Company", "we", "us"), you agree to these
-          Terms of Service. If you do not agree, do not use the Service. You
-          must be at least 18 years old and able to form a binding contract.
+          These Terms of Service ("Terms") are a binding agreement between you
+          and Rig Ledger ("Rig Ledger", "we", "us", or "our") governing your use
+          of the Rig Ledger website, web application, and related services (the
+          "Service"). By creating an account, checking the box at sign-up, or
+          using the Service, you agree to these Terms. If you do not agree, do
+          not use the Service.
+        </p>
+        <p>
+          If you use the Service on behalf of a business, you represent that you
+          are authorized to bind that business to these Terms, and "you"
+          includes that business.
         </p>
 
-        <h2>2. Description of the Service</h2>
+        <h2>2. Eligibility</h2>
+        <p>
+          You must be at least 18 years old and able to form a binding contract
+          to use the Service. The Service is intended for business use by
+          owner-operators, trucking companies, and their drivers located in the
+          United States. It is not intended for personal, family, or household
+          purposes.
+        </p>
+
+        <h2>3. Description of the Service</h2>
         <p>
           Rig Ledger is a software-as-a-service fleet-management platform for
           owner-operators and small trucking fleets. It provides expense and
           income tracking, profit-and-loss reporting, fuel and IFTA bookkeeping
           aids, truck and maintenance records, load tracking, AI-assisted
-          receipt scanning, and hours-of-service (HOS) logging tools. The
-          Service is a record-keeping and planning aid only.
+          receipt scanning, driver invitations, and hours-of-service (HOS)
+          logging tools. The Service is a record-keeping and planning aid only.
+          We may add, change, or remove features over time.
         </p>
 
-        <h2>3. Not a Certified ELD; Compliance Is Your Responsibility</h2>
+        <h2>4. Not a Certified ELD; Compliance Is Your Responsibility</h2>
         <p>
           The hours-of-service feature is NOT a certified Electronic Logging
-          Device under 49 CFR Part 395 and is not registered with the FMCSA. HOS
-          clocks and related outputs are estimates provided for planning and
-          personal record-keeping only. You are solely responsible for
-          compliance with all applicable FMCSA, DOT, and state regulations,
-          including any electronic-logging mandate, hours-of-service limits, and
-          recordkeeping requirements. Do not rely on the Service to satisfy any
-          legal compliance obligation.
+          Device under 49 CFR Part 395 and is not registered with the Federal
+          Motor Carrier Safety Administration (FMCSA). HOS clocks and related
+          outputs are estimates provided for planning and personal
+          record-keeping only. You are solely responsible for compliance with
+          all applicable FMCSA, U.S. Department of Transportation (DOT), and
+          state regulations, including any electronic-logging mandate,
+          hours-of-service limits, drug and alcohol testing, vehicle inspection,
+          and recordkeeping requirements. Do not rely on the Service to satisfy
+          any legal compliance obligation.
         </p>
 
-        <h2>4. No Professional Advice</h2>
+        <h2>5. No Professional Advice</h2>
         <p>
           The Service does not provide legal, tax, accounting, or financial
           advice. All outputs, including profit-and-loss figures, IFTA
@@ -67,59 +90,170 @@ export default function Terms() {
           business decisions.
         </p>
 
-        <h2>5. Accounts and Security</h2>
+        <h2>6. Accounts and Security</h2>
         <p>
-          You are responsible for safeguarding your login credentials and for
-          all activity under your account. Notify us promptly of any
-          unauthorized use. We may suspend or disable accounts that violate
-          these Terms.
+          You must provide accurate, current information when you register and
+          keep it up to date. You are responsible for safeguarding your login
+          credentials and for all activity under your account. Do not share
+          your account with anyone. Notify us promptly at {CONTACT_EMAIL} of any
+          unauthorized access or security concern.
         </p>
 
-        <h2>6. Subscriptions, Billing, and Refunds</h2>
+        <h2>7. Fleet Owners and Drivers</h2>
         <p>
-          Paid plans are billed in advance on a recurring basis through our
-          third-party payment processor. Fees are those listed at the time of
-          purchase. Subscriptions automatically renew until canceled; you may
-          cancel at any time, effective at the end of the current billing
-          period. Except where required by law, fees are non-refundable. You
-          authorize us and our processor to charge your payment method on a
-          recurring basis. You are responsible for applicable taxes. We may
-          change pricing on prior notice.
+          A fleet owner account may invite drivers to join the owner's fleet.
+          The fleet owner controls the fleet's subscription, trucks, loads,
+          expenses, and IFTA records, and is responsible for (a) obtaining any
+          consent required by law before inviting a driver or entering a
+          driver's information, (b) the activity of invited drivers within the
+          fleet, and (c) removing drivers who should no longer have access.
+        </p>
+        <p>
+          A driver's access to the fleet depends on the fleet owner's active
+          subscription and may end if the owner cancels, stops paying, or
+          removes the driver. Records a driver enters into a fleet, such as
+          mileage logs and load updates, are part of that fleet's data.
         </p>
 
-        <h2>7. Acceptable Use</h2>
+        <h2>8. Free Trial</h2>
         <p>
-          You agree not to use the Service unlawfully; not to reverse engineer,
-          decompile, or attempt to access non-public areas; not to upload
-          malicious code; not to infringe others' rights; and not to use the
-          Service to violate any transportation, financial, or other regulation.
+          New subscriptions may include a free trial of seven (7) days. A valid
+          payment method is required to start a trial. Unless you cancel before
+          the trial ends, your subscription will automatically convert to a paid
+          subscription and your payment method will be charged the plan fee at
+          the end of the trial. Each fleet is eligible for one free trial. We may
+          change or discontinue trial offers at any time.
         </p>
 
-        <h2>8. Your Data</h2>
+        <h2>9. Subscriptions, Billing, and Cancellation</h2>
         <p>
-          You retain ownership of the data you submit. You grant us a worldwide,
-          non-exclusive license to host, process, transmit, and display that
-          data solely to operate and improve the Service. You represent that you
-          have the right to submit it, and you are responsible for its accuracy.
-          Our handling of personal data is described in our{' '}
-          <Link to="/privacy">Privacy Policy</Link>.
+          Paid plans are priced by fleet size and billed monthly in advance
+          through our third-party payment processor, Stripe. Fees are those
+          shown at the time of purchase. Your plan limits the number of trucks
+          you can add; to add more trucks, you must upgrade your plan.
+        </p>
+        <p>
+          <strong>Automatic renewal.</strong> Subscriptions automatically renew
+          each billing period until canceled. By subscribing, you authorize us
+          and our processor to charge your payment method each billing period
+          for the plan fee plus any applicable taxes.
+        </p>
+        <p>
+          <strong>Cancellation.</strong> You may cancel at any time from the
+          Billing page in the Service ("Manage Billing"). Cancellation takes
+          effect at the end of the current billing period, and you will keep
+          access until then.
+        </p>
+        <p>
+          <strong>Refunds.</strong> Except where required by law, fees are
+          non-refundable, and we do not provide refunds or credits for partial
+          billing periods or unused features.
+        </p>
+        <p>
+          <strong>Plan changes and price changes.</strong> If you switch plans,
+          charges may be prorated as shown at the time of the change. We may
+          change our prices by giving you at least thirty (30) days' notice by
+          email or in the Service; the new price applies at your next renewal
+          after the notice period. If you do not agree, you may cancel before
+          the change takes effect.
+        </p>
+        <p>
+          <strong>Failed payments.</strong> If a payment fails, we may retry the
+          charge and may suspend access to paid features until the balance is
+          paid.
         </p>
 
-        <h2>9. AI Features</h2>
+        <h2>10. Promotional Codes</h2>
         <p>
-          The AI receipt scanner relies on third-party machine-learning models
-          and may produce inaccurate or incomplete results. You must review and
-          confirm all scanned data before relying on it.
+          We may offer promotional codes that grant access or additional truck
+          capacity. Promotional codes have no cash value, cannot be sold or
+          transferred, and may be limited, changed, or withdrawn at any time. We
+          may revoke benefits obtained through fraud, abuse, or error.
         </p>
 
-        <h2>10. Third-Party Services</h2>
+        <h2>11. Acceptable Use</h2>
+        <p>You agree not to:</p>
+        <ul>
+          <li>use the Service for any unlawful, fraudulent, or deceptive purpose;</li>
+          <li>enter false records to evade any tax, transportation, or financial regulation;</li>
+          <li>access or attempt to access another user's account or data;</li>
+          <li>reverse engineer, decompile, or attempt to access non-public areas or source code of the Service;</li>
+          <li>probe, scan, or test the vulnerability of the Service, or bypass any security or access control;</li>
+          <li>upload viruses, malware, or other harmful code or files;</li>
+          <li>use bots, scrapers, or automated means to access the Service, or overload its infrastructure;</li>
+          <li>resell, sublicense, or provide the Service to third parties outside your fleet; or</li>
+          <li>infringe the intellectual property, privacy, or other rights of others.</li>
+        </ul>
+
+        <h2>12. Your Data</h2>
         <p>
-          The Service integrates third-party providers, including payment
-          processing, AI, and email delivery. We are not responsible for the
-          acts, omissions, or outages of third parties.
+          You retain ownership of the data you submit to the Service ("Your
+          Data"). You grant us a non-exclusive license to host, store, process,
+          transmit, and display Your Data solely to provide, secure, support,
+          and improve the Service. You represent that you have the right to
+          submit Your Data and are responsible for its accuracy and legality.
+        </p>
+        <p>
+          You are responsible for keeping your own copies of records you are
+          legally required to retain, such as tax, IFTA, and hours-of-service
+          records. We are not a records-retention service. Our handling of
+          personal information is described in our{' '}
+          <Link to="/privacy">Privacy Policy</Link>, which is part of these
+          Terms.
         </p>
 
-        <h2>11. Disclaimer of Warranties</h2>
+        <h2>13. AI Features</h2>
+        <p>
+          The AI receipt scanner sends receipt images you upload to a
+          third-party machine-learning provider to extract information, and may
+          produce inaccurate or incomplete results. You must review and confirm
+          all scanned data before saving or relying on it. Do not upload images
+          containing information unrelated to the expense being recorded. Usage
+          of AI features may be limited by plan.
+        </p>
+
+        <h2>14. Third-Party Services</h2>
+        <p>
+          The Service relies on third-party providers, including payment
+          processing, hosting, database, AI, and email delivery providers. Your
+          use of payment features is also subject to Stripe's terms. We are not
+          responsible for the acts, omissions, or outages of third parties.
+        </p>
+
+        <h2>15. Our Intellectual Property</h2>
+        <p>
+          The Service, including its software, design, text, graphics, and the
+          Rig Ledger name and logo, is owned by Rig Ledger and protected by
+          intellectual property laws. Subject to these Terms and payment of
+          applicable fees, we grant you a limited, non-exclusive,
+          non-transferable, revocable right to use the Service for your internal
+          business purposes. All rights not expressly granted are reserved.
+        </p>
+        <p>
+          If you send us suggestions or feedback, we may use them without
+          restriction or compensation to you.
+        </p>
+
+        <h2>16. Electronic Communications</h2>
+        <p>
+          You consent to receive communications from us electronically,
+          including by email and notices within the Service, such as account
+          verification, security alerts, receipts, billing notices, and changes
+          to these Terms. These communications satisfy any legal requirement
+          that such communications be in writing.
+        </p>
+
+        <h2>17. Availability and Changes to the Service</h2>
+        <p>
+          We work to keep the Service available but do not guarantee
+          uninterrupted access. The Service may be unavailable due to
+          maintenance, updates, outages of third-party providers, or events
+          beyond our control. We may modify or discontinue features at any time.
+          If we discontinue the Service entirely, we will give reasonable notice
+          so you can export or record your data.
+        </p>
+
+        <h2>18. Disclaimer of Warranties</h2>
         {/* All-caps preserved verbatim — UCC conspicuousness, not a UI-casing mistake. */}
         <p>
           THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES
@@ -127,75 +261,96 @@ export default function Terms() {
           IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
           PURPOSE, TITLE, NON-INFRINGEMENT, AND ANY WARRANTY OF ACCURACY OR
           REGULATORY COMPLIANCE. WE DO NOT WARRANT THAT THE SERVICE WILL BE
-          UNINTERRUPTED OR ERROR-FREE, OR THAT ANY CALCULATION, CLOCK, OR REPORT
-          IS ACCURATE, COMPLETE, OR COMPLIANT WITH ANY LAW OR REGULATION.
+          UNINTERRUPTED OR ERROR-FREE, THAT DATA WILL NOT BE LOST, OR THAT ANY
+          CALCULATION, CLOCK, OR REPORT IS ACCURATE, COMPLETE, OR COMPLIANT WITH
+          ANY LAW OR REGULATION.
         </p>
 
-        <h2>12. Limitation of Liability</h2>
+        <h2>19. Limitation of Liability</h2>
         {/* All-caps preserved verbatim — UCC conspicuousness, not a UI-casing mistake. */}
         <p>
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COMPANY AND ITS SUPPLIERS
-          WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
-          CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS,
-          REVENUE, DATA, GOODWILL, OR BUSINESS, OR FOR ANY FINES, PENALTIES, OR
-          REGULATORY ACTIONS, ARISING OUT OF OR RELATING TO YOUR USE OF OR
-          INABILITY TO USE THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF
-          SUCH DAMAGES. THE COMPANY'S TOTAL AGGREGATE LIABILITY FOR ALL CLAIMS
-          RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS
-          YOU PAID US IN THE TWELVE MONTHS BEFORE THE EVENT GIVING RISE TO THE
-          CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS (USD $100). SOME JURISDICTIONS
-          DO NOT ALLOW CERTAIN LIMITATIONS, SO SOME OF THE ABOVE MAY NOT APPLY
-          TO YOU.
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, RIG LEDGER AND ITS OWNERS,
+          EMPLOYEES, AND SUPPLIERS WILL NOT BE LIABLE FOR ANY INDIRECT,
+          INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY
+          LOSS OF PROFITS, REVENUE, DATA, GOODWILL, OR BUSINESS, OR FOR ANY
+          FINES, PENALTIES, OR REGULATORY ACTIONS, ARISING OUT OF OR RELATING TO
+          YOUR USE OF OR INABILITY TO USE THE SERVICE, EVEN IF ADVISED OF THE
+          POSSIBILITY OF SUCH DAMAGES. RIG LEDGER'S TOTAL AGGREGATE LIABILITY
+          FOR ALL CLAIMS RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF
+          (A) THE AMOUNTS YOU PAID US IN THE TWELVE (12) MONTHS BEFORE THE EVENT
+          GIVING RISE TO THE CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS (USD $100).
+          SOME JURISDICTIONS DO NOT ALLOW CERTAIN LIMITATIONS, SO SOME OF THE
+          ABOVE MAY NOT APPLY TO YOU.
         </p>
 
-        <h2>13. Indemnification</h2>
+        <h2>20. Indemnification</h2>
         <p>
-          You agree to indemnify, defend, and hold harmless the Company and its
-          officers, employees, and suppliers from and against any claims,
-          damages, losses, fines, penalties, and costs (including reasonable
-          legal fees) arising out of or related to your use of the Service, your
-          data, your violation of these Terms, or your violation of any law or
-          regulation, including any DOT, FMCSA, or tax requirement.
+          You agree to indemnify, defend, and hold harmless Rig Ledger and its
+          owners, employees, and suppliers from and against any claims, damages,
+          losses, fines, penalties, and costs (including reasonable attorneys'
+          fees) arising out of or related to your use of the Service, Your Data,
+          the activity of drivers you invite, your violation of these Terms, or
+          your violation of any law or regulation, including any DOT, FMCSA, or
+          tax requirement.
         </p>
 
-        <h2>14. Termination</h2>
+        <h2>21. Termination</h2>
         <p>
-          You may stop using the Service and delete your account at any time. We
-          may suspend or terminate your access for breach of these Terms or to
-          protect the Service or other users. On termination, your right to use
-          the Service ends. Sections that by their nature should survive
-          (including data, disclaimers, limitation of liability,
-          indemnification, and governing law) will survive.
+          You may stop using the Service at any time. A fleet owner must cancel
+          any active subscription before deleting the account. We may suspend or
+          terminate your access, with or without notice, if you breach these
+          Terms, fail to pay, create risk or legal exposure for us, or if
+          required by law.
         </p>
-
-        <h2>15. Changes to the Service or Terms</h2>
         <p>
-          We may modify the Service or these Terms. We will provide notice of
-          material changes, and your continued use after the effective date
-          constitutes acceptance. We retain a record of the Terms version you
-          accepted at sign-up.
+          When your account is deleted or terminated, your right to use the
+          Service ends and we may delete Your Data, subject to our{' '}
+          <Link to="/privacy">Privacy Policy</Link> and any retention required
+          by law. Deleted data may persist in backups for a limited period.
+          Sections that by their nature should survive termination, including
+          sections 4, 5, 12, and 15 and sections 18 through 23, will survive.
         </p>
 
-        <h2>16. Governing Law and Disputes</h2>
+        <h2>22. Changes to These Terms</h2>
         <p>
-          These Terms are governed by the laws of [[STATE]], without regard to
-          its conflict-of-laws rules. Any dispute will be resolved in the state
-          or federal courts located in [[STATE]], and you consent to their
-          jurisdiction, except where applicable law provides otherwise.
+          We may update these Terms from time to time. If we make material
+          changes, we will notify you by email or in the Service before the
+          changes take effect. Your continued use of the Service after the
+          effective date of updated Terms means you accept them. We keep a
+          record of the version of the Terms you accepted.
         </p>
 
-        <h2>17. General</h2>
+        <h2>23. Governing Law and Disputes</h2>
         <p>
-          If any provision is held unenforceable, the rest remain in effect.
-          These Terms are the entire agreement between you and the Company
-          regarding the Service. Our failure to enforce a provision is not a
-          waiver. We may assign these Terms; you may not assign them without our
-          consent. Neither party is liable for delays caused by events beyond
-          its reasonable control.
+          These Terms are governed by the laws of the State of {GOVERNING_STATE},
+          without regard to its conflict-of-laws rules. Before filing a claim,
+          you agree to first contact us at {CONTACT_EMAIL} and try to resolve
+          the dispute informally for at least thirty (30) days. Any dispute that
+          is not resolved informally will be brought exclusively in the state or
+          federal courts located in {GOVERNING_STATE}, and you and we consent to
+          the personal jurisdiction of those courts, except where applicable
+          law provides otherwise. Either party may bring an eligible claim in
+          small claims court.
         </p>
 
-        <h2>18. Contact</h2>
-        <p>Questions about these Terms: [[CONTACT_EMAIL]].</p>
+        <h2>24. General</h2>
+        <p>
+          These Terms, together with the Privacy Policy, are the entire
+          agreement between you and Rig Ledger regarding the Service. If any
+          provision is held unenforceable, the rest remain in effect. Our
+          failure to enforce a provision is not a waiver. We may assign these
+          Terms, including to a business entity we form or to a successor in a
+          merger or sale; you may not assign them without our written consent.
+          Neither party is liable for delays or failures caused by events beyond
+          its reasonable control. Nothing in these Terms creates a partnership,
+          employment, or agency relationship.
+        </p>
+
+        <h2>25. Contact</h2>
+        <p>
+          Questions about these Terms:{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        </p>
 
         <div className="legal-back legal-back-foot">
           <Link to="/login">← Back to sign in</Link>
