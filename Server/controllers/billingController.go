@@ -48,10 +48,29 @@ func fleetEntitled(ctx context.Context, fleetID string) bool {
 		log.Printf("fleetEntitled: load fleet failed fleet=%s: %v", fleetID, err)
 		return false
 	}
-	// A redeemed promo (any bonus trucks) also grants full fleet access — the
-	// promo unlocks the whole app for the owner and invited drivers without a
-	// paid subscription.
+	return isFleetEntitled(fleet)
+}
+
+// isFleetEntitled is the single definition of access-granting fleet state.
+// A redeemed promo (any bonus trucks) also grants full fleet access — the
+// promo unlocks the whole app for the owner and invited drivers without a
+// paid subscription.
+func isFleetEntitled(fleet *models.Fleet) bool {
 	return entitledStatuses[fleet.SubscriptionStatus] || fleet.PromoBonusTrucks > 0
+}
+
+// remintAccessToken replaces the caller's access-token cookie with one carrying
+// the given entitlement, so a subscription/promo change takes effect on the
+// next request instead of the next refresh cycle. userID/role come from the
+// already-validated JWT context, never client input. Non-fatal on failure: the
+// fleet state is persisted and the next refresh picks it up.
+func remintAccessToken(c *gin.Context, fleetID string, entitled bool) {
+	access, err := utils.GenerateAccessToken(c.GetString("userID"), c.GetString("role"), fleetID, entitled)
+	if err != nil {
+		log.Printf("remintAccessToken: mint failed fleet=%s: %v", fleetID, err)
+		return
+	}
+	utils.SetAccessTokenCookie(c, access)
 }
 
 // loadFleet fetches the fleet referenced by the JWT's fleetID.
@@ -254,6 +273,16 @@ func GetSubscription(c *gin.Context) {
 		return
 	}
 
+	// Checkout returns before the caller's access token knows about the new
+	// subscription (the claim is stamped at mint time). Without this the owner
+	// stays entitled=false for up to 15 min and every gated page 402s them back
+	// here. Sync the cookie whenever the fleet's real state disagrees with the
+	// token — covers a lapse too, not just a start.
+	entitled := isFleetEntitled(fleet)
+	if entitled != c.GetBool("entitled") {
+		remintAccessToken(c, fleetID, entitled)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":         fleet.SubscriptionStatus,
 		"tier":           fleet.SubscriptionTier,
@@ -313,16 +342,10 @@ func RedeemPromo(c *gin.Context) {
 		return
 	}
 
-	// Re-mint the access token with entitled=true and refresh the cookie so the
-	// promo unlocks the app IMMEDIATELY — the caller's current token still says
+	// Unlock the app IMMEDIATELY — the caller's current token still says
 	// entitled=false until it expires otherwise. The fleet now has a promo bonus,
-	// so fleetEntitled is true; pass it explicitly. Non-fatal on failure: the
-	// bonus is already persisted and the next token refresh will pick it up.
-	if access, mintErr := utils.GenerateAccessToken(c.GetString("userID"), c.GetString("role"), fleetID, true); mintErr == nil {
-		utils.SetAccessTokenCookie(c, access)
-	} else {
-		log.Printf("RedeemPromo: re-mint token failed fleet=%s: %v", fleetID, mintErr)
-	}
+	// so entitlement is true; pass it explicitly.
+	remintAccessToken(c, fleetID, true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "Promo applied — 1 free truck added and your fleet is unlocked.",

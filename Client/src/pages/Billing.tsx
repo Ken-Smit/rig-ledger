@@ -5,6 +5,10 @@ import { getSubscription, startCheckout, openBillingPortal, redeemPromo } from '
 import { PLAN_TIERS, isEntitled, statusLabel } from '../types/billing'
 import type { Subscription } from '../types/billing'
 
+// Post-Checkout webhook wait: 2s × 15 = ~30s before giving up.
+const CHECKOUT_POLL_INTERVAL_MS = 2000
+const CHECKOUT_POLL_MAX_ATTEMPTS = 15
+
 function errorMessage(err: unknown): string {
   const data = (err as { response?: { data?: { error?: string } } })?.response?.data
   return data?.error ?? 'Something went wrong. Please try again.'
@@ -25,15 +29,35 @@ export default function Billing() {
   const returned = params.get('status')
 
   useEffect(() => {
-    getSubscription()
-      .then(setSub)
-      .catch((err: unknown) => {
-        const status = (err as { response?: { status?: number } })?.response?.status
-        if (status === 401) navigate('/login')
-        else setError('Failed to load billing')
-      })
-      .finally(() => setLoading(false))
-  }, [navigate])
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+
+    // After a Checkout return the Stripe webhook may land a few seconds after
+    // the redirect. Re-poll until the fleet shows entitled — each successful
+    // call also re-mints the access cookie server-side, so gated pages stop
+    // bouncing back here once it flips.
+    const load = () => {
+      getSubscription()
+        .then((s) => {
+          if (cancelled) return
+          setSub(s)
+          if (returned === 'success' && !isEntitled(s.status) && ++attempts < CHECKOUT_POLL_MAX_ATTEMPTS) {
+            timer = setTimeout(load, CHECKOUT_POLL_INTERVAL_MS)
+          }
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return
+          const status = (err as { response?: { status?: number } })?.response?.status
+          if (status === 401) navigate('/login')
+          else setError('Failed to load billing')
+        })
+        .finally(() => { if (!cancelled) setLoading(false) })
+    }
+    load()
+
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [navigate, returned])
 
   const handleSubscribe = async (tier: string) => {
     setError('')
