@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -26,7 +27,7 @@ import (
 // the bytes never outlive the request.
 const (
 	envGeminiKey   = "GEMINI_API_KEY"
-	geminiModel    = "gemini-2.5-flash-lite"
+	geminiModel    = "gemini-3.5-flash-lite"
 	geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel + ":generateContent"
 
 	// maxReceiptBytes mirrors the 10 MB limit advertised in the SPA upload UI.
@@ -72,6 +73,11 @@ var receiptSchema = map[string]any{
 	},
 	"required": []string{"amount", "date", "category", "vendor"},
 }
+
+// errScannerUnavailable marks an upstream failure that is our problem, not the
+// photo's — a rejected key, a disabled project, or a quota wall. Callers
+// translate it into "scanning is down" copy instead of blaming the user's image.
+var errScannerUnavailable = errors.New("receipt scanner unavailable")
 
 // ReceiptScan is the extracted, normalized result returned to the SPA. It is
 // NOT a persisted document — the client uses it to prefill the Add Entry modal.
@@ -185,6 +191,10 @@ func ScanReceipt(c *gin.Context) {
 	scan, err := extractReceiptFields(ctx, apiKey, data, mtype.String())
 	if err != nil {
 		log.Printf("ScanReceipt: extraction failed: %v", err)
+		if errors.Is(err, errScannerUnavailable) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Receipt scanning is temporarily unavailable. Add the entry manually for now."})
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Couldn't read that receipt. Try a clearer photo or add the entry manually."})
 		return
 	}
@@ -235,6 +245,18 @@ func extractReceiptFields(ctx context.Context, apiKey string, image []byte, mime
 	}
 	if resp.StatusCode != http.StatusOK {
 		// Log the upstream body for diagnostics; never return it to the client.
+		// Auth, quota and upstream-outage statuses are a service fault, not a bad
+		// photo, so they carry the sentinel and get different user-facing copy.
+		switch {
+		case resp.StatusCode == http.StatusUnauthorized,
+			resp.StatusCode == http.StatusForbidden,
+			// 404 means the model name is retired or wrong — a config fault on
+			// our side, never a problem with the uploaded image.
+			resp.StatusCode == http.StatusNotFound,
+			resp.StatusCode == http.StatusTooManyRequests,
+			resp.StatusCode >= 500:
+			return nil, fmt.Errorf("%w: gemini status %d: %s", errScannerUnavailable, resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("gemini status %d: %s", resp.StatusCode, string(body))
 	}
 
