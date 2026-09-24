@@ -2,13 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { register, resendVerification } from '../api/auth'
 import { useAuth } from '../auth/AuthProvider'
-import { useTheme } from '../hooks/useTheme'
 
 type Tab = 'login' | 'register'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { theme, toggle } = useTheme()
   const { login } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
   const [error, setError] = useState('')
@@ -29,12 +27,16 @@ export default function Login() {
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regPasswordConfirm, setRegPasswordConfirm] = useState('')
+  // Explicit consent to the Terms of Service. Required to register: the submit
+  // button is disabled until checked, and handleRegister refuses unchecked.
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const switchTab = (t: Tab) => {
     setTab(t)
     setError('')
     setInfo('')
     setUnverified(false)
+    setAcceptedTerms(false)
   }
 
   const handleLogin = async (e: FormEvent) => {
@@ -83,6 +85,12 @@ export default function Login() {
       setError('Passwords do not match.')
       return
     }
+    // Belt-and-suspenders: the submit button is already disabled until the box
+    // is checked, but never trust UI state alone to gate a legal consent.
+    if (!acceptedTerms) {
+      setError('You must agree to the Terms of Service to create an account.')
+      return
+    }
     setLoading(true)
     try {
       await register({
@@ -90,6 +98,7 @@ export default function Login() {
         last_name: lastName,
         email: regEmail,
         password: regPassword,
+        accepted_terms: acceptedTerms,
       })
       setTab('login')
       setEmail(regEmail)
@@ -103,175 +112,176 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
-      <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.5rem' }}>
-        <button
-          className="btn-ghost btn-sm"
-          onClick={() => navigate('/home')}
-          title="Back to Home"
-        >
-          ⬡ Home
-        </button>
-        <button
-          className="btn-ghost btn-sm nav-theme-toggle"
-          onClick={toggle}
-          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          {theme === 'dark' ? '☀' : '☾'}
-        </button>
-      </div>
-      <div className="login-card">
-        <div className="login-bracket-tl" />
-        <div className="login-bracket-br" />
-
-        <div className="login-header">
-          <div className="login-logo-mark">⬡</div>
-          <h1 className="login-logo-title">Rig Ledger</h1>
-          <p className="login-logo-sub">Fleet Management v1.0</p>
+    <div className="authwrap">
+      <div className="authcard">
+        <Link to="/home" className="authback">← Back to home</Link>
+        <div className="brand">
+          <span className="mark">⬡</span>
+          <span className="word">
+            Rig<span className="cy">Ledger</span>
+          </span>
         </div>
 
-        <div className="login-tabs">
-          <button
-            className={`login-tab ${tab === 'login' ? 'active' : ''}`}
-            onClick={() => switchTab('login')}
-          >
-            Sign In
-          </button>
-          <button
-            className={`login-tab ${tab === 'register' ? 'active' : ''}`}
-            onClick={() => switchTab('register')}
-          >
-            Register
-          </button>
-        </div>
+        <section className="panel">
+          <h1>{tab === 'login' ? 'Sign in' : 'Create account'}</h1>
+          <div className="sub">
+            {tab === 'login'
+              ? 'Welcome back. Enter your details to access your fleet.'
+              : 'Set up your account to start tracking your fleet.'}
+          </div>
 
-        {tab === 'login' ? (
-          <form onSubmit={handleLogin} className="login-form">
-            <div className="field-group">
-              <label className="field-label">Email</label>
-              <input
-                className="field-input"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="operator@fleet.sys"
-                required
-              />
-            </div>
+          <div className="authtabs">
+            <button
+              type="button"
+              className={tab === 'login' ? 'on' : ''}
+              onClick={() => switchTab('login')}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              className={tab === 'register' ? 'on' : ''}
+              onClick={() => switchTab('register')}
+            >
+              Create account
+            </button>
+          </div>
 
-            <div className="field-group">
-              <label className="field-label">Password</label>
-              <input
-                className="field-input"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
+          {error && <div className="err">{error}</div>}
+          {info && <div className="ok">{info}</div>}
 
-            {info && (
-              <div className="login-error" style={{ color: 'var(--green)', borderColor: 'var(--green)' }}>
-                {info}
+          {tab === 'login' ? (
+            <form onSubmit={handleLogin}>
+              <div className="field">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="operator@fleet.sys"
+                  required
+                />
               </div>
-            )}
-            {error && <div className="login-error">{error}</div>}
 
-            {unverified && (
-              <button
-                type="button"
-                className="btn-ghost login-submit"
-                onClick={handleResend}
-                disabled={resending}
-              >
-                {resending ? 'Sending...' : 'Resend Verification Email'}
+              <div className="field">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              {unverified && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={handleResend}
+                  disabled={resending}
+                >
+                  {resending ? 'Sending...' : 'Resend Verification Email'}
+                </button>
+              )}
+
+              <button className="btn primary" type="submit" disabled={loading}>
+                {loading ? 'Signing In...' : 'Sign In'}
               </button>
-            )}
 
-            <button className="btn-primary login-submit" type="submit" disabled={loading}>
-              {loading ? 'Signing In...' : 'Sign In'}
-            </button>
+              <div className="foot">
+                <Link to="/forgot-password">Forgot password?</Link>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleRegister}>
+              <div className="two">
+                <div className="field">
+                  <label>First Name</label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={e => setFirstName(e.target.value)}
+                    placeholder="John"
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label>Last Name</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Doe"
+                    required
+                  />
+                </div>
+              </div>
 
-            <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
-              <Link to="/forgot-password" className="field-hint">
-                Forgot password?
-              </Link>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handleRegister} className="login-form">
-            <div className="login-field-row">
-              <div className="field-group">
-                <label className="field-label">First Name</label>
+              <div className="field">
+                <label>Email</label>
                 <input
-                  className="field-input"
-                  type="text"
-                  value={firstName}
-                  onChange={e => setFirstName(e.target.value)}
-                  placeholder="John"
+                  type="email"
+                  value={regEmail}
+                  onChange={e => setRegEmail(e.target.value)}
+                  placeholder="operator@fleet.sys"
                   required
                 />
               </div>
-              <div className="field-group">
-                <label className="field-label">Last Name</label>
+
+              <div className="field">
+                <label>Password</label>
                 <input
-                  className="field-input"
-                  type="text"
-                  value={lastName}
-                  onChange={e => setLastName(e.target.value)}
-                  placeholder="Doe"
+                  type="password"
+                  value={regPassword}
+                  onChange={e => setRegPassword(e.target.value)}
+                  placeholder="••••••••"
+                  minLength={12}
                   required
                 />
               </div>
-            </div>
 
-            <div className="field-group">
-              <label className="field-label">Email</label>
-              <input
-                className="field-input"
-                type="email"
-                value={regEmail}
-                onChange={e => setRegEmail(e.target.value)}
-                placeholder="operator@fleet.sys"
-                required
-              />
-            </div>
+              <div className="field">
+                <label>Confirm Password</label>
+                <input
+                  type="password"
+                  value={regPasswordConfirm}
+                  onChange={e => setRegPasswordConfirm(e.target.value)}
+                  placeholder="••••••••"
+                  minLength={12}
+                  required
+                />
+              </div>
 
-            <div className="field-group">
-              <label className="field-label">Password</label>
-              <input
-                className="field-input"
-                type="password"
-                value={regPassword}
-                onChange={e => setRegPassword(e.target.value)}
-                placeholder="••••••••"
-                minLength={12}
-                required
-              />
-              <small className="field-hint">Must be at least 12 characters.</small>
-            </div>
+              {/* Client-side <Link> (no target=_blank): a full-page load of
+                  /terms hits the host's SPA fallback, which resolves to the
+                  login page on the live deploy. Routing in-app renders the
+                  public /terms route directly. */}
+              <label className="consent">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={e => setAcceptedTerms(e.target.checked)}
+                  required
+                />
+                <span>
+                  I agree to the{' '}
+                  <Link to="/terms">Terms of Service</Link>
+                </span>
+              </label>
 
-            <div className="field-group">
-              <label className="field-label">Confirm Password</label>
-              <input
-                className="field-input"
-                type="password"
-                value={regPasswordConfirm}
-                onChange={e => setRegPasswordConfirm(e.target.value)}
-                placeholder="••••••••"
-                minLength={12}
-                required
-              />
-            </div>
+              <button
+                className="btn primary"
+                type="submit"
+                disabled={loading || !acceptedTerms}
+              >
+                {loading ? 'Creating Account...' : 'Create Account'}
+              </button>
 
-            {error && <div className="login-error">{error}</div>}
-
-            <button className="btn-primary login-submit" type="submit" disabled={loading}>
-              {loading ? 'Creating Account...' : 'Create Account'}
-            </button>
-          </form>
-        )}
+              <div className="foot">Password must be at least 12 characters.</div>
+            </form>
+          )}
+        </section>
       </div>
     </div>
   )

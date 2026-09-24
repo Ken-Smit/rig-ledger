@@ -87,21 +87,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (bootedRef.current) return
     bootedRef.current = true
 
-    let cancelled = false
     void (async () => {
       // Mobile webviews occasionally drop the access cookie on cold launch,
       // so always attempt a refresh first — it's idempotent and sets a
       // fresh access cookie if the refresh token is still valid.
       await tryRefresh()
       const profile = await fetchProfile()
-      if (cancelled) return
+      // No cancelled-guard here: bootedRef already guarantees this runs once,
+      // and under StrictMode's dev remount the first effect's cleanup would
+      // otherwise cancel the ONLY boot (the remount is blocked by bootedRef),
+      // stranding the FSM in 'loading'. The provider is mounted at the app
+      // root for the app's lifetime, so a late setState is safe.
       if (profile) applyAuthed(profile)
       else applyAnon()
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [applyAuthed, applyAnon])
 
   // Mid-session: a hard refresh failure from the axios interceptor should

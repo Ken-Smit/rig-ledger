@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
+	"math"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/Ken-Smit/RigLedgerServer/database"
 	"github.com/Ken-Smit/RigLedgerServer/models"
@@ -13,6 +16,19 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
+
+// isCalendarDate reports whether s is a real YYYY-MM-DD calendar date.
+//
+// SECURITY/CORRECTNESS: several create paths previously validated dates by
+// length alone (len==10), so "AAAAAAAAAA" or "2026-13-99" slipped through and
+// silently mis-bucketed financial/IFTA records by date. time.Parse with the
+// "2006-01-02" layout rejects both malformed strings and impossible calendar
+// values (it does not roll over month/day overflow), so it is the real gate.
+// Mirrors the date-parse pattern in loadController.go.
+func isCalendarDate(s string) bool {
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
+}
 
 // GetExpenses returns the caller's fleet expenses, sorted newest-first.
 //
@@ -78,8 +94,32 @@ func CreateExpense(c *gin.Context) {
 	fleetID := c.GetString("fleetID")
 
 	var expense models.Expense
-	if err := c.ShouldBindJSON(&expense); err != nil {
-		badRequest(c, err, "Invalid expense data")
+	if !decodeStrict(c, &expense) {
+		return
+	}
+
+	// Normalize + validate the free-form category and money fields. Category is
+	// intentionally NOT an enum — owner-operators may log any expense or income
+	// type — but it is trimmed, lowercased, and length-bounded. Amount must be a
+	// finite, non-negative number; date and description are length-capped. This
+	// is the server-side trust boundary: the SPA validates too, but never trust
+	// the client for financial data.
+	expense.Type = models.ExpenseType(strings.ToLower(strings.TrimSpace(string(expense.Type))))
+	expense.Description = strings.TrimSpace(expense.Description)
+	if expense.Type == "" || len(expense.Type) > 40 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A category is required"})
+		return
+	}
+	if math.IsNaN(expense.Amount) || math.IsInf(expense.Amount, 0) || expense.Amount < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Amount must be zero or more"})
+		return
+	}
+	if !isCalendarDate(expense.Date) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid date"})
+		return
+	}
+	if len(expense.Description) > 200 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Description is too long"})
 		return
 	}
 

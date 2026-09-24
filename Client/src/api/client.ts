@@ -65,6 +65,18 @@ client.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as RetryableConfig | undefined
 
+    // 402 = the fleet has no active subscription (RequireEntitled) or has hit
+    // its plan's truck band. Both are resolved on the billing page, so steer
+    // the user there instead of letting the calling component render a broken
+    // state. The billing endpoints themselves are never gated, so this cannot
+    // loop. We still reject so the caller can stop its own loading state.
+    if (error.response?.status === 402) {
+      if (window.location.pathname !== '/billing') {
+        window.location.href = '/billing'
+      }
+      return Promise.reject(error)
+    }
+
     // Only attempt refresh on a real 401 from a non-auth endpoint that we
     // have not already retried. Login / refresh failures must surface to
     // the caller so the UI can show "invalid credentials" etc.
@@ -91,9 +103,15 @@ client.interceptors.response.use(
       return client(original)
     } catch (refreshErr) {
       notifyAuthFailure()
-      // Avoid a redirect loop on pages that are already public.
-      const path = window.location.pathname
-      if (path !== '/login' && path !== '/home') {
+      // Don't hard-redirect to /login from a PUBLIC path. notifyAuthFailure()
+      // already flips AuthProvider to 'anon', and React Router then routes the
+      // root '/' to '/home' via PrivateRoute. Forcing /login here (the old
+      // behavior) hijacked a fresh visitor landing on rig-ledger.com/ — the
+      // boot profile probe 401s, and they'd be bounced to login instead of the
+      // marketing home. The hard redirect is only for a session that dies on a
+      // genuinely private page.
+      const PUBLIC_PATHS = ['/', '/home', '/demo', '/login']
+      if (!PUBLIC_PATHS.includes(window.location.pathname)) {
         window.location.href = '/login'
       }
       return Promise.reject(refreshErr)

@@ -59,6 +59,14 @@ type User struct {
 	// refresh token to terminate every existing session.
 	ResetTokenHash string     `bson:"reset_token_hash,omitempty" json:"-"`
 	ResetTokenExp  *time.Time `bson:"reset_token_exp,omitempty" json:"-"`
+
+	// Terms-of-Service consent proof, captured at signup for legal
+	// enforceability. The timestamp is a pointer so "never accepted" (nil) is
+	// distinguishable from a zero time.Time. The version is the server's
+	// CurrentTermsVersion at the moment of acceptance — never a client-supplied
+	// value. Both are stamped server-side in the registration handlers.
+	TermsAcceptedAt *time.Time `bson:"terms_accepted_at,omitempty" json:"terms_accepted_at,omitempty"`
+	TermsVersion    string     `bson:"terms_version,omitempty" json:"terms_version,omitempty"`
 }
 
 // RegisterRequest is the request DTO for POST /register.
@@ -73,6 +81,12 @@ type RegisterRequest struct {
 	LastName  string `json:"last_name"  validate:"required,min=2,max=100"`
 	Email     string `json:"email"      validate:"required,email"`
 	Password  string `json:"password"   validate:"required,min=12"`
+
+	// AcceptedTerms is the affirmative ToS-acceptance gate. validate:"eq=true"
+	// rejects any registration where this is not exactly true, so an account
+	// cannot be created without consent. The client sends the boolean only; the
+	// version + timestamp are stamped server-side (see Register).
+	AcceptedTerms bool `json:"accepted_terms" validate:"eq=true"`
 }
 
 // UserLogin is the request DTO for POST /login.

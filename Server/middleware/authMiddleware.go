@@ -40,7 +40,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		userID, role, fleetID, err := utils.ValidateAccessToken(tokenString)
+		userID, role, fleetID, entitled, err := utils.ValidateAccessToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
@@ -62,6 +62,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		c.Set("userID", userID)
 		c.Set("role", role)
 		c.Set("fleetID", fleetID)
+		c.Set("entitled", entitled)
 		c.Next()
 	}
 }

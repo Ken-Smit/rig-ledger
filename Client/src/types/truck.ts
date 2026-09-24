@@ -29,3 +29,10 @@ export interface Truck {
 }
 
 export type TruckFormData = Omit<Truck, '_id' | 'user_id'>
+
+// Display name for a unit: the owner's own number when set, otherwise a stable
+// short form of the ID. The same fallback is inlined in several older views —
+// prefer this helper in new code.
+export function unitLabel(truck: Truck): string {
+  return truck.unit_number ?? `UNIT-${truck._id.slice(-4).toUpperCase()}`
+}

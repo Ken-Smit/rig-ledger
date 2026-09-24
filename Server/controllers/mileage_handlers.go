@@ -112,12 +112,17 @@ func UpsertMileageLog(c *gin.Context) {
 	userID := c.GetString("userID")
 
 	var req models.MileageLogUpsertRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		badRequest(c, err, "Invalid mileage entry")
+	if !decodeStrict(c, &req) {
 		return
 	}
 	if err := validate.Struct(req); err != nil {
 		badRequest(c, err, "Invalid mileage entry")
+		return
+	}
+	// The len=10 validate tag only checks length; parse the date so a 10-char
+	// non-date (e.g. "AAAAAAAAAA") cannot key an odometer row to a bogus day.
+	if !isCalendarDate(req.Date) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid date"})
 		return
 	}
 	if req.StartMileage == nil && req.EndMileage == nil {

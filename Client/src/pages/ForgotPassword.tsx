@@ -30,56 +30,55 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-bracket-tl" />
-        <div className="login-bracket-br" />
-
-        <div className="login-header">
-          <div className="login-logo-mark">⬡</div>
-          <h1 className="login-logo-title">Rig Ledger</h1>
-          <p className="login-logo-sub">Reset Password</p>
+    <div className="authwrap">
+      <div className="authcard">
+        <div className="brand">
+          <span className="mark">⬡</span>
+          <span className="word">
+            Rig<span className="cy">Ledger</span>
+          </span>
         </div>
 
-        {submitted ? (
-          <>
-            <p style={{ textAlign: 'center' }}>{message}</p>
-            <Link to="/login" className="btn-primary login-submit">
-              Back to Sign In
-            </Link>
-          </>
-        ) : (
-          <form onSubmit={handleSubmit} className="login-form">
-            <div className="field-group">
-              <label className="field-label">Email</label>
-              <input
-                className="field-input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="operator@fleet.sys"
-                required
-              />
-              <small className="field-hint">
-                Enter the email on your account and we'll send a reset link.
-              </small>
-            </div>
+        <section className="panel">
+          <h1>Reset Password</h1>
+          <div className="sub">
+            {submitted
+              ? 'Check your inbox for the next step.'
+              : 'Enter the email on your account and we will send a reset link.'}
+          </div>
 
-            {error && <div className="login-error">{error}</div>}
+          {submitted ? (
+            <>
+              <div className="ok">{message}</div>
+              <div className="foot">
+                <Link to="/login">Back to sign in</Link>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="field">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="operator@fleet.sys"
+                  required
+                />
+              </div>
 
-            <button
-              className="btn-primary login-submit"
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? 'Sending...' : 'Send Reset Link'}
-            </button>
+              {error && <div className="err">{error}</div>}
 
-            <Link to="/login" className="btn-ghost login-submit">
-              Back to Sign In
-            </Link>
-          </form>
-        )}
+              <button className="btn primary" type="submit" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+
+              <div className="foot">
+                <Link to="/login">Back to sign in</Link>
+              </div>
+            </form>
+          )}
+        </section>
       </div>
     </div>
   )

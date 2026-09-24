@@ -12,6 +12,9 @@ export interface RegisterPayload {
   last_name: string
   email: string
   password: string
+  // accepted_terms records the user's explicit consent to the Terms of Service
+  // at sign-up. The server stores the accepted version for its audit trail.
+  accepted_terms: boolean
 }
 
 export interface RegisterResponse {
@@ -27,6 +30,7 @@ export interface RegisterDriverPayload {
   last_name: string
   email: string
   password: string
+  accepted_terms: boolean
 }
 
 export const login = async (
