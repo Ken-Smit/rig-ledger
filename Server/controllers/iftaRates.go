@@ -17,10 +17,9 @@ package controllers
 // returns unpriced lines (see rateUnpublished) rather than computing against a
 // stale rate, because a plausible wrong number is worse than a visible blank.
 //
-// NOT MODELED: Kentucky and Virginia levy a separate per-gallon SURCHARGE on
-// top of the base rate (KY $0.105, VA $0.143 through 2026). Rig Ledger does not
-// compute surcharge lines, so returns touching those two jurisdictions are
-// incomplete — surchargeJurisdictions drives the warning that says so.
+// SURCHARGES: Kentucky and Virginia levy a separate per-gallon surcharge on top
+// of the base rate. Those live in iftaDieselSurcharges below and ARE computed —
+// as their own return line, on taxable gallons only, with no purchase credit.
 
 // rateQuarter identifies one published quarterly rate table.
 type rateQuarter struct {
@@ -84,12 +83,31 @@ var iftaJurisdictions = map[string]bool{
 	"VA": true, "VT": true, "WA": true, "WI": true, "WV": true, "WY": true,
 }
 
-// surchargeJurisdictions are members levying a separate surcharge Rig Ledger
-// does NOT compute. The value is the published surcharge for reference only;
-// its presence drives a user-facing warning that the line is incomplete.
-var surchargeJurisdictions = map[string]float64{
-	"KY": 0.105,
-	"VA": 0.143,
+// iftaDieselSurcharges maps a quarter to that quarter's published per-gallon
+// SURCHARGE, levied on top of the base diesel rate. Generated from the same
+// official CSVs.
+//
+// A surcharge is assessed on TAXABLE GALLONS with no credit for fuel purchased
+// in the jurisdiction — it cannot be pre-paid at the pump, so a surcharge line
+// is always an amount due and never a credit. See GetIftaReturn.
+//
+// Indiana levied a diesel surcharge historically but publishes none for 2026
+// (folded into its base rate), so it is absent here rather than zeroed.
+var iftaDieselSurcharges = map[rateQuarter]map[string]float64{
+	{Year: 2026, Quarter: 1}: {"KY": 0.105, "VA": 0.143},
+	{Year: 2026, Quarter: 2}: {"KY": 0.105, "VA": 0.143},
+	{Year: 2026, Quarter: 3}: {"KY": 0.105, "VA": 0.143},
+}
+
+// surchargeFor returns the per-gallon surcharge for a jurisdiction in a quarter,
+// and whether one is published. Absence means no surcharge, not missing data.
+func surchargeFor(jurisdiction string, year, quarter int) (float64, bool) {
+	table, ok := iftaDieselSurcharges[rateQuarter{Year: year, Quarter: quarter}]
+	if !ok {
+		return 0, false
+	}
+	rate, ok := table[jurisdiction]
+	return rate, ok
 }
 
 // rateStatus explains why a return line does or does not carry a tax rate.

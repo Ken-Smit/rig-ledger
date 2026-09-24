@@ -88,3 +88,46 @@ func TestRatesWithinPlausibleRange(t *testing.T) {
 		}
 	}
 }
+
+// Surcharge rates must match the official matrix. An outdated figure is the
+// exact failure here: older IFTA documentation still cites KY at 2.0 cents and
+// VA at 6.5 cents, which have not been the diesel rates for years.
+func TestSurchargeRatesMatchOfficialMatrix(t *testing.T) {
+	for _, q := range []int{1, 2, 3} {
+		if rate, ok := surchargeFor("KY", 2026, q); !ok || rate != 0.105 {
+			t.Errorf("KY 2026Q%d surcharge = %.4f (ok=%v), want 0.1050", q, rate, ok)
+		}
+		if rate, ok := surchargeFor("VA", 2026, q); !ok || rate != 0.143 {
+			t.Errorf("VA 2026Q%d surcharge = %.4f (ok=%v), want 0.1430", q, rate, ok)
+		}
+	}
+}
+
+// Only KY and VA levy a diesel surcharge in 2026. Indiana's is published as
+// "$-" (folded into its base rate), so it must NOT produce a surcharge line —
+// that would double-charge every Indiana mile.
+func TestOnlyKentuckyAndVirginiaHaveSurcharges(t *testing.T) {
+	for q, table := range iftaDieselSurcharges {
+		for jur := range table {
+			if jur != "KY" && jur != "VA" {
+				t.Errorf("%dQ%d has an unexpected surcharge for %s", q.Year, q.Quarter, jur)
+			}
+		}
+	}
+	if _, ok := surchargeFor("IN", 2026, 3); ok {
+		t.Error("Indiana must not carry a 2026 surcharge — it is folded into the base rate")
+	}
+	for _, jur := range []string{"TX", "CA", "OR", "TN"} {
+		if _, ok := surchargeFor(jur, 2026, 3); ok {
+			t.Errorf("%s must not carry a surcharge", jur)
+		}
+	}
+}
+
+// A quarter with no loaded table must report no surcharge rather than falling
+// back to another quarter's figure.
+func TestSurchargeUnloadedQuarter(t *testing.T) {
+	if _, ok := surchargeFor("KY", 2027, 1); ok {
+		t.Error("unloaded quarter must not return a surcharge")
+	}
+}

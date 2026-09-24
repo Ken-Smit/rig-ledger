@@ -188,9 +188,10 @@ export default function Ifta() {
                   </thead>
                   <tbody>
                     {ret.lines.map(l => (
-                      <tr key={l.jurisdiction}>
+                      <tr key={`${l.jurisdiction}${l.surcharge ? '-surcharge' : ''}`}>
                         <td className="st">
                           {l.jurisdiction}
+                          {l.surcharge && <span className="chip" style={{ marginLeft: 8 }}>Surcharge</span>}
                           {!l.rated && <span className="chip warn" style={{ marginLeft: 8 }}>No rate</span>}
                           {l.rate_note && (
                             <div className="sub" style={{ margin: '4px 0 0', fontSize: 11.5, lineHeight: 1.4 }}>
@@ -198,9 +199,9 @@ export default function Ifta() {
                             </div>
                           )}
                         </td>
-                        <td className="r num">{num(l.miles)}</td>
+                        <td className="r num">{l.surcharge ? '—' : num(l.miles)}</td>
                         <td className="r num">{l.taxable_gallons.toFixed(1)}</td>
-                        <td className="r num">{l.purchased_gallons.toFixed(1)}</td>
+                        <td className="r num">{l.surcharge ? '—' : l.purchased_gallons.toFixed(1)}</td>
                         <td className="r num">{l.rated ? money(l.tax_rate) : '—'}</td>
                         <td className={`r num ${l.net > 0 ? 'down' : l.net < 0 ? 'up' : ''}`}>{money(l.net)}</td>
                       </tr>

@@ -44,6 +44,9 @@ export interface IftaReturnLine {
   // (no IFTA fuel tax), for an unpublished quarter, and for the KY/VA surcharge
   // Rig Ledger does not calculate.
   rate_note?: string
+  // True when this row is a jurisdiction's separate surcharge line. Surcharge
+  // is charged on taxable gallons with no credit for fuel bought there.
+  surcharge?: boolean
 }
 
 export interface IftaReturn {

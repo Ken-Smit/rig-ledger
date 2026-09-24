@@ -328,12 +328,6 @@ func GetIftaReturn(c *gin.Context) {
 			note = j + " does not levy an IFTA fuel tax — it is reported separately (Oregon uses a weight-mile tax)."
 		case rateUnpublished:
 			note = "No published rate loaded for this quarter."
-		default:
-			// Priced line, but KY/VA also levy a surcharge we do not compute,
-			// so say so rather than let the total read as complete.
-			if _, hasSurcharge := surchargeJurisdictions[j]; hasSurcharge {
-				note = j + " also levies a separate surcharge that Rig Ledger does not calculate. Add it from your state's form."
-			}
 		}
 
 		lines = append(lines, models.IftaReturnLine{
@@ -348,6 +342,31 @@ func GetIftaReturn(c *gin.Context) {
 			Rated:            status == rateOK,
 			RateNote:         note,
 		})
+
+		// Kentucky and Virginia levy a surcharge on top of the fuel tax, filed
+		// as its own line on the return.
+		//
+		// The surcharge math is NOT the same as the fuel-tax math: it is
+		// assessed on taxable gallons with no credit for gallons purchased in
+		// the jurisdiction, because surcharge cannot be paid at the pump. So
+		// TaxPaid is always 0 and the line is always an amount due. Deducting
+		// purchased gallons here would under-report the return.
+		if surRate, ok := surchargeFor(j, year, quarter); ok {
+			surOwed := taxableGallons * surRate
+			netTax += surOwed
+			lines = append(lines, models.IftaReturnLine{
+				Jurisdiction:   j,
+				Miles:          0, // miles are counted once, on the fuel-tax line
+				TaxableGallons: taxableGallons,
+				TaxRate:        surRate,
+				TaxOwed:        surOwed,
+				TaxPaid:        0, // surcharge can never be pre-paid at the pump
+				Net:            surOwed,
+				Rated:          true,
+				Surcharge:      true,
+				RateNote:       j + " surcharge is charged on taxable gallons only — buying fuel in " + j + " earns no credit against it.",
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, models.IftaReturn{

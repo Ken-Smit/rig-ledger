@@ -77,6 +77,11 @@ type IftaReturnLine struct {
 	// incomplete — shown to the user so an unpriced line is never mistaken for
 	// a zero-tax line. Empty when the line is fully priced.
 	RateNote string `json:"rate_note,omitempty"`
+	// Surcharge marks this as a jurisdiction's separate surcharge line rather
+	// than its fuel-tax line. A surcharge is assessed on taxable gallons with
+	// NO credit for fuel purchased — it cannot be pre-paid at the pump — so
+	// TaxPaid is always 0 and Net is always an amount due.
+	Surcharge bool `json:"surcharge,omitempty"`
 }
 
 // IftaReturn is the computed quarterly summary returned to the SPA.
