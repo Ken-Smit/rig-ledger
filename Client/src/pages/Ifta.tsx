@@ -134,8 +134,18 @@ export default function Ifta() {
         {error && <div className="alert-error">{error}</div>}
 
         <div className="done-note" style={{ marginBottom: 18 }}>
-          Tax rates are a development snapshot — verify against the official IFTA quarterly rates before filing.
+          Rig Ledger is not affiliated with, endorsed by, or acting on behalf of IFTA, Inc., the IRS,
+          or any state tax agency. These figures are a bookkeeping aid, not a filed return — check
+          every number against your base jurisdiction's official form before you file.
         </div>
+
+        {ret && !ret.rates_published && (
+          <div className="alert-error" style={{ marginBottom: 18 }}>
+            No official tax rates are loaded for Q{ret.quarter} {ret.year}, so this return is unpriced —
+            the miles and gallons are yours, but every tax figure reads $0. Do not file from this page
+            for this quarter.
+          </div>
+        )}
 
         {loading ? (
           <div className="loading-state"><div className="loading-spinner" /><p>Loading...</p></div>
@@ -164,6 +174,7 @@ export default function Ifta() {
               {!ret || ret.lines.length === 0 ? (
                 <p className="sub" style={{ margin: 0 }}>No miles or fuel logged for this quarter yet.</p>
               ) : (
+                <>
                 <table>
                   <thead>
                     <tr>
@@ -178,7 +189,15 @@ export default function Ifta() {
                   <tbody>
                     {ret.lines.map(l => (
                       <tr key={l.jurisdiction}>
-                        <td className="st">{l.jurisdiction}{!l.rated && <span className="chip warn" style={{ marginLeft: 8 }}>No rate</span>}</td>
+                        <td className="st">
+                          {l.jurisdiction}
+                          {!l.rated && <span className="chip warn" style={{ marginLeft: 8 }}>No rate</span>}
+                          {l.rate_note && (
+                            <div className="sub" style={{ margin: '4px 0 0', fontSize: 11.5, lineHeight: 1.4 }}>
+                              {l.rate_note}
+                            </div>
+                          )}
+                        </td>
                         <td className="r num">{num(l.miles)}</td>
                         <td className="r num">{l.taxable_gallons.toFixed(1)}</td>
                         <td className="r num">{l.purchased_gallons.toFixed(1)}</td>
@@ -195,6 +214,13 @@ export default function Ifta() {
                     </tr>
                   </tfoot>
                 </table>
+                {ret.rates_source && (
+                  <p className="sub" style={{ marginTop: 10, fontSize: 11.5 }}>
+                    Rates: {ret.rates_source}, Q{ret.quarter} {ret.year}. Verify against your base
+                    jurisdiction's official form before filing.
+                  </p>
+                )}
+                </>
               )}
             </section>
 

@@ -73,6 +73,10 @@ type IftaReturnLine struct {
 	TaxPaid          float64 `json:"tax_paid"`
 	Net              float64 `json:"net"`
 	Rated            bool    `json:"rated"`
+	// RateNote explains, in plain English, why a line carries no rate or is
+	// incomplete — shown to the user so an unpriced line is never mistaken for
+	// a zero-tax line. Empty when the line is fully priced.
+	RateNote string `json:"rate_note,omitempty"`
 }
 
 // IftaReturn is the computed quarterly summary returned to the SPA.
@@ -81,6 +85,12 @@ type IftaReturn struct {
 	Quarter      int              `json:"quarter"`
 	TotalMiles   float64          `json:"total_miles"`
 	TotalGallons float64          `json:"total_gallons"`
+	// RatesPublished is false when no rate table is loaded for the requested
+	// quarter — every line is then unpriced and the return must not be filed.
+	RatesPublished bool `json:"rates_published"`
+	// RatesSource names where the rates came from, so the figure on screen is
+	// traceable to an authority rather than to an unattributed constant.
+	RatesSource string `json:"rates_source,omitempty"`
 	FleetMPG     float64          `json:"fleet_mpg"`
 	NetTax       float64          `json:"net_tax"`
 	Lines        []IftaReturnLine `json:"lines"`

@@ -306,17 +306,36 @@ func GetIftaReturn(c *gin.Context) {
 
 	lines := make([]models.IftaReturnLine, 0, len(jurs))
 	var netTax float64
+	_, ratesPublished := iftaDieselRates[rateQuarter{Year: year, Quarter: quarter}]
 	for _, j := range jurs {
-		rate, rated := rateFor(j)
+		rate, status := rateFor(j, year, quarter)
 		var taxableGallons float64
 		if fleetMPG > 0 {
 			taxableGallons = milesByJur[j] / fleetMPG
 		}
 		purchased := gallonsByJur[j]
+		// Tax is computed from the rate, which is 0 for both rateNoTax and
+		// rateUnpublished. Rated distinguishes them for the client: an Oregon
+		// line really is $0 owed, while an unpublished line is simply unknown.
 		taxOwed := taxableGallons * rate
 		taxPaid := purchased * rate
 		net := taxOwed - taxPaid
 		netTax += net
+
+		note := ""
+		switch status {
+		case rateNoTax:
+			note = j + " does not levy an IFTA fuel tax — it is reported separately (Oregon uses a weight-mile tax)."
+		case rateUnpublished:
+			note = "No published rate loaded for this quarter."
+		default:
+			// Priced line, but KY/VA also levy a surcharge we do not compute,
+			// so say so rather than let the total read as complete.
+			if _, hasSurcharge := surchargeJurisdictions[j]; hasSurcharge {
+				note = j + " also levies a separate surcharge that Rig Ledger does not calculate. Add it from your state's form."
+			}
+		}
+
 		lines = append(lines, models.IftaReturnLine{
 			Jurisdiction:     j,
 			Miles:            milesByJur[j],
@@ -326,7 +345,8 @@ func GetIftaReturn(c *gin.Context) {
 			TaxOwed:          taxOwed,
 			TaxPaid:          taxPaid,
 			Net:              net,
-			Rated:            rated,
+			Rated:            status == rateOK,
+			RateNote:         note,
 		})
 	}
 
@@ -338,5 +358,8 @@ func GetIftaReturn(c *gin.Context) {
 		FleetMPG:     fleetMPG,
 		NetTax:       netTax,
 		Lines:        lines,
+
+		RatesPublished: ratesPublished,
+		RatesSource:    iftaRatesSource,
 	})
 }

@@ -40,6 +40,10 @@ export interface IftaReturnLine {
   tax_paid: number
   net: number
   rated: boolean
+  // Plain-English reason a line is unpriced or incomplete. Present for Oregon
+  // (no IFTA fuel tax), for an unpublished quarter, and for the KY/VA surcharge
+  // Rig Ledger does not calculate.
+  rate_note?: string
 }
 
 export interface IftaReturn {
@@ -50,6 +54,10 @@ export interface IftaReturn {
   fleet_mpg: number
   net_tax: number
   lines: IftaReturnLine[]
+  // False when no rate table is loaded for the requested quarter — the return
+  // is unpriced and must not be filed.
+  rates_published: boolean
+  rates_source?: string
 }
 
 // US IFTA member jurisdictions supported by the backend rate table.
