@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import type { Truck } from '../types/truck'
+import { unitLabel } from '../types/truck'
 import type { ExpenseFormData } from '../types/expense'
-import { INCOME_TYPE, EXPENSE_PRESETS, INCOME_PRESETS, slugifyCategory } from '../types/expense'
+import { INCOME_TYPE, FUEL_TYPE, EXPENSE_PRESETS, INCOME_PRESETS, slugifyCategory, validateFuelEntry } from '../types/expense'
+import type { FuelEntry } from '../types/expense'
+import { IFTA_JURISDICTIONS } from '../types/ifta'
 
 type Direction = 'expense' | 'income'
 
@@ -13,24 +16,41 @@ export interface EntryPrefill {
   amount?: string
   date?: string
   description?: string
+  gallons?: string
+  jurisdiction?: string
 }
+
+// Re-exported for callers that only import from this module.
+export type { FuelEntry }
 
 interface Props {
   trucks: Truck[]
   onSave: (data: ExpenseFormData) => Promise<void>
   onClose: () => void
   initial?: EntryPrefill
+  // Supplied by callers that can file an IFTA fuel purchase. Its presence is
+  // what surfaces the Gallons / State fields on a fuel entry — a caller without
+  // it never shows inputs whose values would be silently dropped. Runs after
+  // onSave resolves; the caller owns its own failure handling, because by then
+  // the expense is already saved.
+  onFuel?: (entry: FuelEntry) => Promise<void>
 }
 
-export default function AddExpenseModal({ trucks, onSave, onClose, initial }: Props) {
+export default function AddExpenseModal({ trucks, onSave, onClose, initial, onFuel }: Props) {
   const [direction, setDirection] = useState<Direction>(initial?.direction ?? 'expense')
   const [category, setCategory] = useState(initial?.category ?? '')
+  // One truck: nothing to choose, so seed it and render it as static text.
+  // Several: seed empty and make the driver pick — defaulting to trucks[0]
+  // silently filed entries against whichever unit happened to sort first.
+  const soleTruck = trucks.length === 1 ? trucks[0] : null
   const [form, setForm] = useState({
-    truck_id:    trucks[0]?._id ?? '',
+    truck_id:    soleTruck?._id ?? '',
     amount:      initial?.amount ?? '',
     date:        initial?.date || new Date().toISOString().slice(0, 10),
     description: initial?.description ?? '',
   })
+  const [gallons, setGallons]           = useState(initial?.gallons ?? '')
+  const [jurisdiction, setJurisdiction] = useState(initial?.jurisdiction ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
 
@@ -39,6 +59,9 @@ export default function AddExpenseModal({ trucks, onSave, onClose, initial }: Pr
 
   const isIncome = direction === 'income'
   const presets = isIncome ? INCOME_PRESETS : EXPENSE_PRESETS
+  // Fuel is the only category that carries gallons onto the IFTA return, and
+  // only when the caller can actually file them.
+  const isFuel = !isIncome && !!onFuel && slugifyCategory(category) === FUEL_TYPE
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,6 +74,15 @@ export default function AddExpenseModal({ trucks, onSave, onClose, initial }: Pr
     const type = isIncome ? INCOME_TYPE : (slugifyCategory(category) || 'other')
     const description = form.description.trim() || (isIncome ? category.trim() : '')
 
+    // Gallons are optional — a fuel entry without them is just an expense.
+    // See validateFuelEntry for the rule; it is pure so it can be tested.
+    let fuel: FuelEntry | undefined
+    if (isFuel) {
+      const result = validateFuelEntry(gallons, jurisdiction)
+      if (result?.error) { setError(result.error); return }
+      fuel = result?.entry
+    }
+
     setSaving(true)
     setError('')
     try {
@@ -61,6 +93,7 @@ export default function AddExpenseModal({ trucks, onSave, onClose, initial }: Pr
         date: form.date,
         ...(description && { description }),
       })
+      if (fuel && onFuel) await onFuel(fuel)
       onClose()
     } catch {
       setError('Failed to save entry')
@@ -90,13 +123,20 @@ export default function AddExpenseModal({ trucks, onSave, onClose, initial }: Pr
 
           <div className="field-group">
             <label className="field-label">Unit</label>
-            <select className="field-input field-select" value={form.truck_id} onChange={set('truck_id')} required>
-              {trucks.map(t => (
-                <option key={t._id} value={t._id}>
-                  {t.unit_number ?? `UNIT-${t._id.slice(-4).toUpperCase()}`} — {t.year} {t.make} {t.model}
-                </option>
-              ))}
-            </select>
+            {soleTruck ? (
+              <div className="field-static">
+                {unitLabel(soleTruck)} — {soleTruck.year} {soleTruck.make} {soleTruck.model}
+              </div>
+            ) : (
+              <select className="field-input field-select" value={form.truck_id} onChange={set('truck_id')} required>
+                <option value="" disabled>Select a unit</option>
+                {trucks.map(t => (
+                  <option key={t._id} value={t._id}>
+                    {unitLabel(t)} — {t.year} {t.make} {t.model}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="modal-row">
@@ -133,6 +173,34 @@ export default function AddExpenseModal({ trucks, onSave, onClose, initial }: Pr
               placeholder="0.00"
             />
           </div>
+
+          {isFuel && (
+            <div className="modal-row">
+              <div className="field-group">
+                <label className="field-label">Gallons</label>
+                <input
+                  className="field-input"
+                  type="number"
+                  value={gallons}
+                  onChange={e => setGallons(e.target.value)}
+                  min={0}
+                  step="0.001"
+                  placeholder="optional"
+                />
+              </div>
+              <div className="field-group">
+                <label className="field-label">State Fueled</label>
+                <select
+                  className="field-input field-select"
+                  value={jurisdiction}
+                  onChange={e => setJurisdiction(e.target.value)}
+                >
+                  <option value="">Select a state</option>
+                  {IFTA_JURISDICTIONS.map(j => <option key={j} value={j}>{j}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div className="field-group">
             <label className="field-label">Note</label>

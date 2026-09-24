@@ -6,6 +6,10 @@ export type ExpenseType = string
 
 export const INCOME_TYPE = 'income'
 
+// Fuel is the one category with an IFTA side-effect: gallons and the state of
+// purchase drive the quarterly return.
+export const FUEL_TYPE = 'fuel'
+
 // Common presets surfaced in the Add Entry datalist. Not an allowlist — users
 // may type any category; these are just quick picks.
 export const EXPENSE_PRESETS = [
@@ -16,6 +20,31 @@ export const EXPENSE_PRESETS = [
 export const INCOME_PRESETS = [
   'Load income', 'Detention', 'Fuel surcharge', 'Lumper reimbursement', 'Other',
 ] as const
+
+// The IFTA side of a fuel entry: gallons bought in a state, filed on the
+// quarterly return.
+export interface FuelEntry {
+  gallons: number
+  jurisdiction: string
+}
+
+// Decide what a fuel entry's gallons/state inputs mean at submit time. Pure, so
+// the rule that guards a tax filing is testable without rendering the modal.
+//
+//   null  -> nothing to file (blank gallons is a plain expense)
+//   error -> block submit and show this message
+//   entry -> file it
+//
+// Gallons without a state is the case that matters: it cannot be filed, and
+// guessing the state would mean filing tax against the wrong jurisdiction.
+export function validateFuelEntry(gallons: string, jurisdiction: string):
+  { entry?: FuelEntry; error?: string } | null {
+  if (!gallons.trim()) return null
+  const g = Number(gallons)
+  if (!(g > 0)) return { error: 'Enter gallons greater than zero' }
+  if (!jurisdiction) return { error: 'Pick the state you fueled in so this lands on your IFTA return' }
+  return { entry: { gallons: g, jurisdiction } }
+}
 
 export interface Expense {
   _id: string

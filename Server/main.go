@@ -12,6 +12,7 @@ import (
 	"github.com/Ken-Smit/RigLedgerServer/middleware"
 	"github.com/Ken-Smit/RigLedgerServer/routes"
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -119,16 +120,44 @@ func main() {
 	router.Use(middleware.SecurityHeaders())
 	router.Use(middleware.RequireHTTPS())
 
+	// Compress responses. Mounted before CORS so it wraps every route's writer.
+	//
+	// /expenses/scan is excluded: its request body is already-compressed image
+	// bytes and its response is a few fields, so gzip there burns CPU on a
+	// 0.5-CPU instance for no payload win.
+	//
+	// SECURITY: compressing a response that mixes a secret with attacker-
+	// controlled input is the BREACH precondition. Not reachable here — auth
+	// tokens travel in httpOnly cookies (headers are not compressed by this
+	// middleware) and no handler echoes user input beside a secret.
+	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/v1/expenses/scan"})))
+
 	// CORS must be configured explicitly. An unset ALLOWED_ORIGIN in release
 	// mode is a misconfiguration, not a "skip CORS" signal.
 	router.Use(cors.New(buildCORSConfig()))
+
+	// Content-Type gate runs after CORS so preflights and rejected origins are
+	// already handled, and before the routes so no handler sees an unexpected
+	// body encoding.
+	router.Use(middleware.RequireJSONContentType())
 
 	routes.SetupRoutes(router)
 	routes.SetupProtectedRoutes(router)
 
 	// Health check — exempted from RequireHTTPS so platform probes work.
+	// Health check. Reports the deployed commit so "is my fix live?" is
+	// answerable without dashboard access — Render injects RENDER_GIT_COMMIT
+	// on every deploy; locally it is unset and the body stays plain "ok".
 	router.GET("/healthz", func(c *gin.Context) {
-		c.String(http.StatusOK, "ok")
+		commit := os.Getenv("RENDER_GIT_COMMIT")
+		if len(commit) > 7 {
+			commit = commit[:7]
+		}
+		if commit == "" {
+			c.String(http.StatusOK, "ok")
+			return
+		}
+		c.String(http.StatusOK, "ok %s", commit)
 	})
 
 	port := os.Getenv(envPort)

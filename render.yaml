@@ -25,6 +25,20 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      # Stripe billing — required in release mode; the server log.Fatal's at
+      # boot without either, so a missing value is a failed deploy, never
+      # silently broken checkout.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # AI receipt scanner. OPTIONAL: unset simply disables the feature and the
+      # scan endpoint returns a 503 telling the user to enter the expense by hand.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Optional promo code granting a free extra truck. Unset disables redemption.
+      - key: PROMO_CODE_FREE_TRUCK
+        sync: false
 
   # Frontend Static Site
   - type: web

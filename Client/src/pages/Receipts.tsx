@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
-import AddExpenseModal, { type EntryPrefill } from '../components/AddExpenseModal'
+import AddExpenseModal, { type EntryPrefill, type FuelEntry } from '../components/AddExpenseModal'
 import { getTrucks } from '../api/trucks'
 import { createExpense } from '../api/expenses'
+import { createIftaFuel } from '../api/ifta'
 import { scanReceipt } from '../api/receipts'
 import { compressImage } from '../utils/compressImage'
 import { labelForType, slugifyCategory } from '../types/expense'
@@ -41,8 +42,15 @@ export default function Receipts() {
   const [scanning, setScanning] = useState(false)
   const [error, setError]       = useState('')
   const [prefill, setPrefill]   = useState<EntryPrefill | null>(null)
+  // Set when the expense saved but its IFTA fuel entry did not. Not an error —
+  // the money is recorded; only the tax-log half needs redoing.
+  const [notice, setNotice]     = useState('')
   const [recent, setRecent]     = useState<Capture[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  // Carries truck/date/amount from the saved expense to the IFTA write that
+  // follows it. A ref, not state: the modal calls onFuel immediately after
+  // onSave resolves, well before a re-render would publish new state.
+  const savedExpense = useRef<{ truck_id: string; date: string; amount: number } | null>(null)
 
   useEffect(() => {
     getTrucks()
@@ -53,15 +61,18 @@ export default function Receipts() {
       })
   }, [navigate])
 
-  // Map the AI-extracted fields onto the modal's seed shape. Fuel gallons (if
-  // any) go into the note so they aren't lost — the expense schema has no
-  // gallons field.
+  // Map the AI-extracted fields onto the modal's seed shape. Gallons and the
+  // state of purchase seed the IFTA half of a fuel entry; the note keeps the
+  // vendor. A blank jurisdiction means the server couldn't read a valid one —
+  // the modal then makes the driver pick before it will file.
   const toPrefill = (scan: ScanResult): EntryPrefill => ({
-    direction:   'expense',
-    category:    scan.category ? labelForType(slugifyCategory(scan.category)) : '',
-    amount:      scan.amount ? String(scan.amount) : '',
-    date:        scan.date,
-    description: scan.gallons ? `${scan.vendor} · ${scan.gallons} gal`.trim() : scan.vendor,
+    direction:    'expense',
+    category:     scan.category ? labelForType(slugifyCategory(scan.category)) : '',
+    amount:       scan.amount ? String(scan.amount) : '',
+    date:         scan.date,
+    description:  scan.vendor,
+    gallons:      scan.gallons ? String(scan.gallons) : '',
+    jurisdiction: scan.jurisdiction ?? '',
   })
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,6 +81,7 @@ export default function Receipts() {
     if (!file) return
 
     setError('')
+    setNotice('')
     setScanning(true)
     try {
       const compressed = await compressImage(file)
@@ -82,8 +94,14 @@ export default function Receipts() {
     }
   }
 
+  // The expense and its IFTA fuel entry are two writes to two collections.
+  // They are not atomic: the expense is the record of money and must never be
+  // rolled back or double-posted because the tax log failed. handleFuel is
+  // therefore called only after the expense succeeds, and swallows its own
+  // failure into a notice instead of throwing back into the modal.
   const handleSave = async (data: ExpenseFormData) => {
     const exp = await createExpense(data)
+    savedExpense.current = { truck_id: data.truck_id, date: data.date, amount: data.amount }
     setRecent(prev => [{
       id:     exp._id,
       vendor: exp.description || labelForType(exp.type),
@@ -91,6 +109,26 @@ export default function Receipts() {
       amount: money(exp.amount),
     }, ...prev])
     setPrefill(null)
+  }
+
+  const handleFuel = async (fuel: FuelEntry) => {
+    const ctx = savedExpense.current
+    if (!ctx) return
+    try {
+      await createIftaFuel({
+        truck_id:     ctx.truck_id,
+        date:         ctx.date,
+        jurisdiction: fuel.jurisdiction,
+        gallons:      fuel.gallons,
+        amount:       ctx.amount,
+      })
+    } catch {
+      // Never rethrow: the expense is already saved, and a retry from the modal
+      // would post the money a second time.
+      setNotice('Saved to expenses. Adding it to your IFTA fuel log didn’t go through — add the gallons on the IFTA page.')
+    } finally {
+      savedExpense.current = null
+    }
   }
 
   const noTrucks = trucks.length === 0
@@ -107,6 +145,7 @@ export default function Receipts() {
         </div>
 
         {error && <div className="alert-error" style={{ marginBottom: 18 }}>{error}</div>}
+        {notice && <div className="done-note" style={{ marginBottom: 18 }}>{notice}</div>}
         {noTrucks && <div className="done-note" style={{ marginBottom: 18 }}>Add a truck first — every entry is logged against a unit.</div>}
 
         <div className="grid2">
@@ -154,6 +193,7 @@ export default function Receipts() {
           trucks={trucks}
           initial={prefill}
           onSave={handleSave}
+          onFuel={handleFuel}
           onClose={() => setPrefill(null)}
         />
       )}

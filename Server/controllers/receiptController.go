@@ -58,6 +58,7 @@ const receiptPrompt = `You are a receipt parser for a trucking expense app. Read
 - category: one lowercase word from: fuel, maintenance, repairs, tires, insurance, tolls, permits, parking, meals, lodging, other.
 - vendor: the merchant or station name.
 - gallons: fuel gallons if this is a fuel purchase, otherwise 0.
+- jurisdiction: the two-letter US state code where the purchase was made, read from the station address. Use an empty string if you cannot read it. Never guess.
 Return only the structured data.`
 
 // receiptSchema is Gemini's responseSchema — forcing structured JSON output so
@@ -70,6 +71,9 @@ var receiptSchema = map[string]any{
 		"category": map[string]any{"type": "string"},
 		"vendor":   map[string]any{"type": "string"},
 		"gallons":  map[string]any{"type": "number"},
+		// Deliberately absent from "required": a receipt whose address is
+		// unreadable should come back blank, not with a guessed state.
+		"jurisdiction": map[string]any{"type": "string"},
 	},
 	"required": []string{"amount", "date", "category", "vendor"},
 }
@@ -87,6 +91,10 @@ type ReceiptScan struct {
 	Category string  `json:"category"`
 	Vendor   string  `json:"vendor"`
 	Gallons  float64 `json:"gallons,omitempty"`
+	// Jurisdiction is the two-letter state the fuel was bought in, used to file
+	// the purchase on the IFTA return. Empty when the receipt did not yield a
+	// valid IFTA member state — the driver then picks it by hand.
+	Jurisdiction string `json:"jurisdiction,omitempty"`
 }
 
 // Gemini generateContent request/response shapes — only the fields we use.
@@ -110,14 +118,35 @@ type geminiRequest struct {
 	} `json:"generationConfig"`
 }
 
+type geminiResponsePart struct {
+	Text string `json:"text"`
+	// Thought marks a reasoning part. Gemini 3.x models can emit one before the
+	// answer; it is never the JSON we asked for.
+	Thought bool `json:"thought"`
+}
+
+type geminiCandidate struct {
+	Content struct {
+		Parts []geminiResponsePart `json:"parts"`
+	} `json:"content"`
+	FinishReason string `json:"finishReason"`
+}
+
 type geminiResponse struct {
-	Candidates []struct {
-		Content struct {
-			Parts []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"content"`
-	} `json:"candidates"`
+	Candidates []geminiCandidate `json:"candidates"`
+}
+
+// firstTextPart returns the first part carrying actual answer text, skipping
+// reasoning parts and blanks. Returns "" when the candidate held no answer —
+// a truncated (MAX_TOKENS) or thought-only reply.
+func firstTextPart(parts []geminiResponsePart) string {
+	for _, p := range parts {
+		if p.Thought || strings.TrimSpace(p.Text) == "" {
+			continue
+		}
+		return p.Text
+	}
+	return ""
 }
 
 // ScanReceipt reads a receipt image and returns the extracted expense fields.
@@ -202,6 +231,22 @@ func ScanReceipt(c *gin.Context) {
 	c.JSON(http.StatusOK, scan)
 }
 
+// normalizeJurisdiction returns an uppercase IFTA member state, or "" for
+// anything the rate table does not cover.
+//
+// This is the trust boundary on a tax-relevant field: the model is asked not to
+// guess, but a misread, a Canadian province or an invented code must never
+// reach the client as a fileable jurisdiction. Blank forces the driver to pick.
+// Gated against the same table CreateIftaFuel validates against, so a value
+// that survives here is one the IFTA endpoint will accept.
+func normalizeJurisdiction(s string) string {
+	j := strings.ToUpper(strings.TrimSpace(s))
+	if !isIftaJurisdiction(j) {
+		return ""
+	}
+	return j
+}
+
 // extractReceiptFields sends the image to Gemini and returns the normalized
 // fields. The returned values are clamped to the same trust boundary
 // CreateExpense enforces so a hostile or garbled model reply cannot smuggle a
@@ -264,17 +309,23 @@ func extractReceiptFields(ctx context.Context, apiKey string, image []byte, mime
 	if err := json.Unmarshal(body, &gr); err != nil {
 		return nil, fmt.Errorf("decode gemini envelope: %w", err)
 	}
-	if len(gr.Candidates) == 0 || len(gr.Candidates[0].Content.Parts) == 0 {
+	if len(gr.Candidates) == 0 {
 		return nil, fmt.Errorf("gemini returned no candidates")
+	}
+	cand := gr.Candidates[0]
+	text := firstTextPart(cand.Content.Parts)
+	if text == "" {
+		return nil, fmt.Errorf("gemini returned no usable text (finishReason=%s, parts=%d)", cand.FinishReason, len(cand.Content.Parts))
 	}
 
 	var scan ReceiptScan
-	if err := json.Unmarshal([]byte(gr.Candidates[0].Content.Parts[0].Text), &scan); err != nil {
-		return nil, fmt.Errorf("decode receipt json: %w", err)
+	if err := json.Unmarshal([]byte(text), &scan); err != nil {
+		return nil, fmt.Errorf("decode receipt json (finishReason=%s): %w", cand.FinishReason, err)
 	}
 
 	scan.Category = strings.ToLower(strings.TrimSpace(scan.Category))
 	scan.Vendor = strings.TrimSpace(scan.Vendor)
+	scan.Jurisdiction = normalizeJurisdiction(scan.Jurisdiction)
 	if scan.Amount < 0 || math.IsNaN(scan.Amount) || math.IsInf(scan.Amount, 0) {
 		scan.Amount = 0
 	}

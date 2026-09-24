@@ -7,4 +7,7 @@ export interface ScanResult {
   category: string
   vendor: string
   gallons?: number
+  // Two-letter IFTA state, or absent when the receipt didn't yield a valid one.
+  // The server validates against its rate table, so any value here is fileable.
+  jurisdiction?: string
 }
