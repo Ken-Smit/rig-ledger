@@ -1,5 +1,7 @@
 # Build backend
-FROM golang:1.25-alpine AS builder
+# Go 1.26+ is required by the module (go.mod `go 1.26.0`): gin-contrib/gzip and
+# golang.org/x/crypto both declare it. An older builder fails at `go mod download`.
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
